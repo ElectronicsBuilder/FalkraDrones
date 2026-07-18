@@ -27,3 +27,29 @@ jobs:
 
     - name: Show size
       run: arm-none-eabi-size build/Debug/FalkraDrones.elf
+
+    - name: Split internal / external flash images
+      run: |
+        cd build/Debug
+        # Internal flash (0x08080000): everything except the QSPI sections
+        arm-none-eabi-objcopy -O binary \
+          -R ExtFlashSection -R FontFlashSection -R TextFlashSection \
+          FalkraDrones.elf FalkraDronesInternalFlash.bin
+        # External QSPI flash (0x90000000): TouchGFX assets only
+        arm-none-eabi-objcopy -O binary \
+          -j ExtFlashSection -j FontFlashSection -j TextFlashSection \
+          FalkraDrones.elf FalkraDronesExternalFlash.bin
+        # Full ihex keeps addresses for tools that flash both via ext. loader
+        arm-none-eabi-objcopy -O ihex FalkraDrones.elf FalkraDrones.hex
+        ls -la FalkraDronesInternalFlash.bin FalkraDronesExternalFlash.bin FalkraDrones.hex
+
+    - name: Upload firmware artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: FalkraDrones-firmware-${{ github.sha }}
+        path: |
+          build/Debug/FalkraDrones.elf
+          build/Debug/FalkraDrones.hex
+          build/Debug/FalkraDronesInternalFlash.bin
+          build/Debug/FalkraDronesExternalFlash.bin
+        retention-days: 30
