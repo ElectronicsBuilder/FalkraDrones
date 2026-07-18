@@ -52,16 +52,16 @@ cmake --build build
 ```cmd
 cd path\to\FalkraDrones
 
-# Configure & Build
-cmake -B build -G Ninja
-cmake --build build
+# Configure & Build (uses the arm-none-eabi toolchain via CMake presets)
+cmake --preset Debug
+cmake --build --preset Debug
 ```
 
+**Output ELF:** `build/Debug/FalkraDrones.elf`
 
-**Output ELF:** build/FalkraDrones.elf
+**tasks.json example** (build + load QSPI assets if changed):
 
-
-** tasks.json "example" **  <- Load QSPI Assets if changed 
+```json
 {
   "version": "2.0.0",
   "tasks": [
@@ -84,15 +84,17 @@ cmake --build build
       ],
       "problemMatcher": []
     }
-
   ]
 }
-
-
+```
 
 ## GitHub Actions
 
-This project builds automatically using GitHub Actions CI on every push to `main`
+This project builds automatically with GitHub Actions CI on every push and pull
+request to `main` and `dev`. Each run uploads firmware artifacts:
+`FalkraDronesInternalFlash.bin` (internal flash, 0x08080000),
+`FalkraDronesExternalFlash.bin` (QSPI assets, 0x90000000), plus the full
+`.hex` and `.elf`.
 
 ---
 
