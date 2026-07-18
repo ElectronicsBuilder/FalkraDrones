@@ -32,7 +32,7 @@ extern "C" {
 
 #include "stm32f7xx_custom.h"
 
-#include "TOF_PROXIMITY.hpp"
+#include "tof_proximity.hpp"
 #include "FreeRTOS.h"
 #include "cmsis_os.h"
 

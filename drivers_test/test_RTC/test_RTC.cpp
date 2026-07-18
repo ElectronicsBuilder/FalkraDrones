@@ -30,7 +30,7 @@
  */
 
 #include "test_RTC.hpp"
-#include "Rtc.hpp"
+#include "rtc.hpp"
 #include "log.hpp"
 #include "driver_manager.hpp"
 #include <stdio.h>

@@ -28,7 +28,7 @@
 #include "console_internal.h"
 #include "test_spi.hpp"
 #include "test_ppm.hpp"
-#include "test_batterymonitor.hpp"
+#include "test_batteryMonitor.hpp"
 #include <stdlib.h>
 #include <string.h>
 

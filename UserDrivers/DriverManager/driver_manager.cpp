@@ -42,7 +42,7 @@
 #include "SHT4x.hpp"
 #include "bmp581.hpp"
 #include "BNO085.hpp"
-#include "BQ27441.hpp"
+#include "bq27441.hpp"
 #include "max98357.hpp"
 #include "tps2115.hpp"
 #include "tps2121.hpp"

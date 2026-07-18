@@ -35,7 +35,7 @@
 #include "bmp581.hpp"
 #include "BNO085.hpp"
 #include "sh2_SensorValue.h"
-#include "BQ27441.hpp"
+#include "bq27441.hpp"
 #include "BatteryMonitor.hpp"
 #include "TofProximityManager.hpp"
 #include "ppm.hpp"

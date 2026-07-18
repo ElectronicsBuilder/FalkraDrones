@@ -33,9 +33,9 @@
 #include "log.hpp"
 #include "main.h"
 #include "driver_manager.hpp"
-#include "TPS2115.hpp"
-#include "TPS2121.hpp"
-#include "TXS0108.hpp"
+#include "tps2115.hpp"
+#include "tps2121.hpp"
+#include "txs0108.hpp"
 
 extern TIM_HandleTypeDef htim1;
 

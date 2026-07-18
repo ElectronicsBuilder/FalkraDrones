@@ -21,8 +21,12 @@
 extern "C" {
 #endif
 
+#ifndef MAX_TOF_SENSOR
 #define MAX_TOF_SENSOR          6
+#endif
+#ifndef MAX_ZONE_PER_SENSOR
 #define MAX_ZONE_PER_SENSOR     16
+#endif
 
 #define TOF_DEFAULT_DETECT_DISTANCE_CM   15
 #define TOF_DEFAULT_MIN_DISTANCE_CM      5
