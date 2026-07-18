@@ -2,9 +2,9 @@ name: Build Firmware
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, dev ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, dev ]
 
 jobs:
   build:
@@ -12,19 +12,18 @@ jobs:
 
     steps:
     - name: Checkout repo
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
     - name: Install ARM Toolchain
       run: |
         sudo apt update
         sudo apt install -y cmake ninja-build gcc-arm-none-eabi
 
-    - name: Configure CMake
-      run: cmake -B build -G Ninja
+    - name: Configure CMake (Debug preset, arm-none-eabi toolchain)
+      run: cmake --preset Debug
 
     - name: Build
-      run: cmake --build build
+      run: cmake --build --preset Debug
 
     - name: Show size
-      run: |
-        arm-none-eabi-size build/falkraDrones.elf || true
+      run: arm-none-eabi-size build/Debug/FalkraDrones.elf
