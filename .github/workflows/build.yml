@@ -1,0 +1,30 @@
+name: Build Firmware
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repo
+      uses: actions/checkout@v3
+
+    - name: Install ARM Toolchain
+      run: |
+        sudo apt update
+        sudo apt install -y cmake ninja-build gcc-arm-none-eabi
+
+    - name: Configure CMake
+      run: cmake -B build -G Ninja
+
+    - name: Build
+      run: cmake --build build
+
+    - name: Show size
+      run: |
+        arm-none-eabi-size build/falkraDrones.elf || true

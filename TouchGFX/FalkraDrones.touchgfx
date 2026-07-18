@@ -1,0 +1,192 @@
+{
+  "Application": {
+    "Screens": [
+      {
+        "Name": "splashScreen",
+        "Components": [
+          {
+            "Type": "BoxWithBorder",
+            "Name": "boxWithBorderMain",
+            "Width": 170,
+            "Height": 320,
+            "BorderSize": 5
+          },
+          {
+            "Type": "TextArea",
+            "Name": "textFalkradrones",
+            "X": 12,
+            "Y": 7,
+            "Width": 153,
+            "Height": 48,
+            "TextId": "__SingleUse_CU43",
+            "TextRotation": "0",
+            "Color": {
+              "Red": 255,
+              "Blue": 225
+            },
+            "AutoSize": true
+          },
+          {
+            "Type": "DigitalClock",
+            "Name": "digitalClock",
+            "X": 117,
+            "Y": 215,
+            "Width": 53,
+            "Height": 18,
+            "TextColor": {
+              "Red": 99,
+              "Green": 110,
+              "Blue": 230
+            },
+            "TextId": "__SingleUse_V6FG",
+            "DisplaySeconds": true,
+            "DisplayLeadingZeroForHourIndicator": true
+          },
+          {
+            "Type": "Image",
+            "Name": "droneImage",
+            "X": -1,
+            "Y": 96,
+            "Width": 170,
+            "Height": 129,
+            "RelativeFilename": "drone_170.fw.png"
+          },
+          {
+            "Type": "TextArea",
+            "Name": "textApplication",
+            "X": 8,
+            "Y": 65,
+            "Width": 157,
+            "Height": 25,
+            "TextId": "__SingleUse_KKGQ",
+            "TextRotation": "0",
+            "Color": {
+              "Red": 255,
+              "Green": 150,
+              "Blue": 3
+            },
+            "AutoSize": true
+          },
+          {
+            "Type": "BoxWithBorder",
+            "Name": "AppStatusBox",
+            "Y": 233,
+            "Width": 169,
+            "Height": 37,
+            "BorderColor": {
+              "Red": 217,
+              "Green": 217,
+              "Blue": 217
+            },
+            "BorderSize": 3
+          },
+          {
+            "Type": "BoxWithBorder",
+            "Name": "progressBarBox",
+            "X": 1,
+            "Y": 280,
+            "Width": 168,
+            "Height": 33,
+            "BorderColor": {
+              "Red": 255,
+              "Green": 255,
+              "Blue": 255
+            },
+            "BorderSize": 3
+          },
+          {
+            "Type": "TextArea",
+            "Name": "AppStatus",
+            "X": 5,
+            "Y": 239,
+            "Width": 158,
+            "Height": 25,
+            "TextId": "__SingleUse_LASD",
+            "TextRotation": "0",
+            "Color": {
+              "Green": 229,
+              "Blue": 250
+            },
+            "Wildcard1": {
+              "TextId": "__SingleUse_OGZW",
+              "UseBuffer": true,
+              "BufferSize": 20
+            }
+          },
+          {
+            "Type": "BoxProgress",
+            "Name": "boxProgress1",
+            "X": 35,
+            "Y": 287,
+            "Width": 100,
+            "Height": 18,
+            "Color": {
+              "Green": 240,
+              "Blue": 255
+            },
+            "Direction": "Right",
+            "Preset": "alternate_theme\\presets\\boxprogress\\thick\\tiny_active.json",
+            "FileNameBackground": "__generated\\alternate_theme_images_widgets_boxprogress_thick_tiny.png",
+            "IndicatorPositionWidth": 100,
+            "IndicatorPositionHeight": 18,
+            "ProgressRangeMax": 100
+          }
+        ],
+        "Interactions": []
+      }
+    ],
+    "CustomContainerDefinitions": [],
+    "Name": "MyApplication",
+    "Resolution": {
+      "Width": 170,
+      "Height": 320
+    },
+    "SelectedColorDepth": 16,
+    "StartupScreenName": "splashScreen",
+    "SelectedStartupLanguage": "GB",
+    "TouchGfxPath": "../Middlewares/ST/touchgfx",
+    "UIPath": ".",
+    "AvailableColorDepths": [
+      16
+    ],
+    "AvailableLCDs": {
+      "16": "LCD16bpp"
+    },
+    "AvailableSections": [
+      "ExtFlashSection",
+      "IntFlashSection"
+    ],
+    "AvailableResolutions": [
+      {
+        "Width": 170,
+        "Height": 320
+      }
+    ],
+    "PhysicalButtons": [],
+    "FrameworkFeatures": {
+      "LCD16bpp": {
+        "Id": "LCD16bpp",
+        "IsEnabled": true
+      }
+    },
+    "GenerateAssetsCommand": "make -f simulator/gcc/Makefile assets -j8",
+    "PostGenerateCommand": "touchgfx update_project --project-file=simulator/msvs/Application.vcxproj",
+    "PostGenerateTargetCommand": "touchgfx update_project",
+    "CompileSimulatorCommand": "make -f simulator/gcc/Makefile -j8",
+    "RunSimulatorCommand": "build\\bin\\simulator.exe",
+    "LandscapeSkinX": 0,
+    "LandscapeSkinY": 0,
+    "PortraitSkinX": 0,
+    "PortraitSkinY": 0,
+    "DisplayOrientation": "Portrait",
+    "Family": "STM32F7",
+    "SubFamily": "STM32F7x7",
+    "Toolchain": "CMake",
+    "Platform": "m7",
+    "ProjectFile": "../FalkraDrones.ioc",
+    "OptionalComponentsRoot": "../Middlewares/ST/touchgfx_components",
+    "OptionalComponents": [],
+    "AdditionalFeatures": []
+  },
+  "Version": "4.25.0"
+}

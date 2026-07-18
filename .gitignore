@@ -1,0 +1,59 @@
+# Ignore CMake build files
+/build/
+/CMakeFiles/
+/cmake-build-*/
+build.ninja
+.ninja_deps
+.ninja_log
+CMakeCache.txt
+cmake_install.cmake
+compile_commands.json
+
+# Ignore CubeMX artifacts
+# NOTE: FalkraDrones.ioc and .mxproject are intentionally TRACKED — the .ioc
+# owns hardware config (e.g. I2C1 FM+ timing); without it CubeMX regeneration
+# is impossible for anyone cloning the repo.
+*.launch
+*.log
+*.settings
+*.project
+*.cproject
+
+# Ignore binary outputs
+*.elf
+*.bin
+*.hex
+*.map
+
+# Ignore backup files
+*~
+*.swp
+*.bak
+*.tmp
+*.user
+
+# Ignore VSCode folders
+.vscode/
+.idea/
+
+# Ignore other temp stuff
+*.DS_Store
+Thumbs.db
+
+# Ignore QSPI flash hash/timestamp
+tools/external_loader/.last_qspi_*
+
+# Ignore Claude Code personal settings
+.claude/
+
+# Python artifacts
+__pycache__/
+*.pyc
+
+# Generated perf captures (measurement data, not source)
+tools/tof_perf_*.json
+
+#others
+.userSettings
+testFile.txt
+
