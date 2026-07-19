@@ -50,8 +50,14 @@ tools/external_loader/.last_qspi_*
 __pycache__/
 *.pyc
 
-# Generated perf captures (measurement data, not source)
+# Generated perf/verification captures (measurement data, not source)
+tools/captures/
 tools/tof_perf_*.json
+tools/tof_payload_*.txt
+tools/tof_i2c_it_*.txt
+tools/dm_fix_*.txt
+tools/dm_migration_*.txt
+tools/env_all_dm_*.txt
 
 #others
 .userSettings
