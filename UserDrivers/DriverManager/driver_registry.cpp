@@ -60,6 +60,10 @@ static const DriverMetadata driver_registry[] = {
     {DriverId::TXS0108, "TXS0108 (Level Shifter)", false, 0, {}, 100, 30},
 
     // Complex Sensors (Level 4 - depends on level shifter)
+#if DM_OPT_TOF_INTEGRATION
+    {DriverId::TOF_PROXIMITY, "ToF Proximity", false, 1,
+        {DriverId::TXS0108, DriverId::COUNT, DriverId::COUNT, DriverId::COUNT}, 100, 35},
+#else
     {DriverId::VL53L5CX_1, "ToF Sensor 1", false, 1,
         {DriverId::TXS0108, DriverId::COUNT, DriverId::COUNT, DriverId::COUNT}, 1500, 35},
     {DriverId::VL53L5CX_2, "ToF Sensor 2", false, 1,
@@ -72,6 +76,7 @@ static const DriverMetadata driver_registry[] = {
         {DriverId::TXS0108, DriverId::COUNT, DriverId::COUNT, DriverId::COUNT}, 1500, 35},
     {DriverId::VL53L5CX_6, "ToF Sensor 6", false, 1,
         {DriverId::TXS0108, DriverId::COUNT, DriverId::COUNT, DriverId::COUNT}, 1500, 35},
+#endif
 
     // Peripherals (Level 3-4)
     {DriverId::ST7789, "ST7789 (Display)", false, 0, {}, 500, 40},

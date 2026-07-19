@@ -87,6 +87,13 @@ public:
     static void reportWarning(DriverId id, const char* warning_msg);
 
     /**
+     * @brief Mirror DriverManager state transitions into the health registry
+     * @param id Driver ID
+     * @param state New DriverManager state
+     */
+    static void setState(DriverId id, DriverState state);
+
+    /**
      * @brief Check if all critical drivers are healthy
      * @return true if all required drivers in READY state with good health
      */

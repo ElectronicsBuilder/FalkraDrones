@@ -70,6 +70,12 @@ public:
     static void updateAllSensors(FalkraStatus& status);
 
     /**
+     * @brief Decoupled/tiered sensor update path.
+     * Performs sensor I/O outside status_mutex, then commits a short memcpy.
+     */
+    static void updateAllSensorsDecoupled(uint32_t tick);
+
+    /**
      * @brief Thread-safe update of FalkraStatus with callback
      * Acquires mutex, calls updater callback, releases mutex
      * @param updater Lambda or function that updates status fields

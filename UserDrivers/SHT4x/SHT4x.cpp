@@ -31,8 +31,20 @@
 #include "SHT4x.hpp"
 #include "log.hpp"
 #include "i2c2_bus_lock.hpp"  // SHT4x shares I2C2 with BQ27441/BMP581 on this board
+#include "cmsis_os.h"
+#include "FreeRTOS.h"
+#include "task.h"
 
 #define I2C_TIMEOUT_MS 1000
+
+static void sht4x_delay_ms(uint32_t ms)
+{
+    if (xTaskGetSchedulerState() == taskSCHEDULER_RUNNING) {
+        osDelay(ms);
+    } else {
+        HAL_Delay(ms);
+    }
+}
 
 SHT4x::SHT4x(I2C_HandleTypeDef* i2cHandle)
     : i2cHandle(i2cHandle),
@@ -61,7 +73,7 @@ bool SHT4x::init()
         return false;
     }
 
-    HAL_Delay(10); // <-- Add small 10ms delay after reset
+    sht4x_delay_ms(10); // Add small 10ms delay after reset
 
     setPrecision(SHT4X_HIGH_PRECISION);
     setHeater(SHT4X_NO_HEATER);
@@ -84,7 +96,7 @@ bool SHT4x::readTempAndHumidity(float& temp, float& humidity)
         return false;
     }
 
-    HAL_Delay(10); // <-- small delay before reading data!
+    sht4x_delay_ms(10); // Small delay before reading data
 
     if (!readData(buffer, sizeof(buffer))) {
         LOG_ERROR("[SHT4x] Failed to read measurement data");

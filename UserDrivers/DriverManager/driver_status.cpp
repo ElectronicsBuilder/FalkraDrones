@@ -25,6 +25,8 @@
  * @brief   Status collection and telemetry update implementation
  */
 #include "driver_status.hpp"
+#include "dm_opts.h"
+#include "tof_speed_opts.h"
 #include "status.hpp"
 #include "cmsis_os.h"
 #include "FreeRTOS.h"
@@ -77,10 +79,41 @@ void DriverStatus::updateAllSensors(FalkraStatus& status) {
     updateEnvironmentalSensors(status);
     updateMotionSensors(status);
     updateBatteryData(status);
- //   updateToFSensors(status);
+#if DM_OPT_TOF_INTEGRATION
+    updateToFSensors(status);
+#endif
     updateRCInput(status);
     updatePowerStatus(status);
     updateMemoryStatus(status);
+}
+
+void DriverStatus::updateAllSensorsDecoupled(uint32_t tick) {
+    FalkraStatus working = getSnapshot();
+    working.lastUpdateMs = HAL_GetTick();
+
+    updateRCInput(working);
+    updatePowerStatus(working);
+#if DM_OPT_TOF_INTEGRATION
+    updateToFSensors(working);
+#endif
+
+    if ((tick % 10U) == 0U) {
+        updateEnvironmentalSensors(working);
+        updateBatteryData(working);
+    }
+
+    if ((tick % 30U) == 0U) {
+        updateMotionSensors(working);
+    }
+
+    if ((tick % 40U) == 0U) {
+        updateMemoryStatus(working);
+    }
+
+    updateStatus([&working](FalkraStatus& status) {
+        working.tofCmdStatus = status.tofCmdStatus;
+        status = working;
+    });
 }
 
 void DriverStatus::updateEnvironmentalSensors(FalkraStatus& status) {
@@ -210,14 +243,64 @@ void DriverStatus::updateBatteryData(FalkraStatus& status) {
 }
 
 void DriverStatus::updateToFSensors(FalkraStatus& status) {
-    (void)status;  // Parameter not directly used - ToF updates handled by TofProximityManager
+#if DM_OPT_TOF_INTEGRATION
+    auto& dm = DriverManager::getInstance();
+    auto* mgr = dm.getTofProximity();
+    if (mgr == nullptr) {
+        return;
+    }
 
+    TofDistanceSnapshot snapshot = {};
+    if (!mgr->getSnapshot(&snapshot)) {
+        return;
+    }
+
+    uint32_t now_ms = HAL_GetTick();
+    bool any_present = false;
+    bool any_fresh = false;
+    bool any_stale = false;
+    static bool stale_reported = false;
+
+    for (uint8_t i = 0; i < MAX_TOF_SENSOR; i++) {
+        const auto& sensor = mgr->getSensor(static_cast<TofSensorId>(i));
+        const char* name = sensor.getName();
+
+        std::strncpy(status.tofDeviceName[i], name, sizeof(status.tofDeviceName[i]) - 1);
+        status.tofDeviceName[i][sizeof(status.tofDeviceName[i]) - 1] = '\0';
+        status.tofDeviceLoc[i] = i;
+        status.tofDeviceStatus[i] = snapshot.sensor_valid[i];
+        status.tofSensorDistance[i] = snapshot.distance_mm[i] / 10U;
+        status.tofDetectingFlag[i] = static_cast<uint8_t>(sensor.getDetectionFlag());
+
+        if (snapshot.sensor_valid[i]) {
+            any_present = true;
+            uint32_t last_update_ms = mgr->getLastUpdateMs(i);
+            if (last_update_ms != 0U && (now_ms - last_update_ms) <= TOF_STALE_THRESHOLD_MS) {
+                any_fresh = true;
+            } else {
+                any_stale = true;
+            }
+        }
+    }
+
+    if (any_present && !any_fresh && !stale_reported) {
+        DriverHealthMonitor::reportError(DriverId::TOF_PROXIMITY, "all present ToF sensors stale");
+        stale_reported = true;
+    } else if (any_stale && !stale_reported) {
+        DriverHealthMonitor::reportWarning(DriverId::TOF_PROXIMITY, "present sensor stale");
+        stale_reported = true;
+    } else if (any_fresh && !any_stale) {
+        stale_reported = false;
+    }
+#else
+    (void)status;  // Parameter not directly used - ToF updates handled by TofProximityManager
     // ToF proximity system uses TofProximityManager singleton
     // The manager internally updates g_status with sensor data
     auto& mgr = TofProximityManager::getInstance();
     if (mgr.isRanging()) {
         mgr.process();
     }
+#endif
 }
 
 void DriverStatus::updateRCInput(FalkraStatus& status) {

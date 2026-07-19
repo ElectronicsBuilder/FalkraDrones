@@ -52,6 +52,8 @@
 #include "vl53l5cx.hpp"
 #include "TofProximityManager.hpp"
 #include "app_tof.hpp"
+#include "FreeRTOS.h"
+#include "task.h"
 
 // Forward declares
 extern RtcDriver rtc;
@@ -156,12 +158,28 @@ bool DriverManager::initializeCore(void) {
         DriverId::RTC_MODULE,
         DriverId::LOG,
         DriverId::BATTERY_MONITOR,
+        DriverId::TXS0108,
+#if DM_OPT_TOF_INTEGRATION
+        DriverId::TOF_PROXIMITY,
+#endif
         DriverId::ST7789,
     };
 
     for (auto driver_id : critical_drivers) {
         if (!initializeDriver(driver_id)) {
-            LOG_ERROR("[DRV_MGR] Core driver failed: %s", getDriverMetadata(driver_id)->name);
+            const auto* meta = getDriverMetadata(driver_id);
+            const char* name = meta ? meta->name : "Unknown";
+
+            if (driver_id == DriverId::TXS0108
+#if DM_OPT_TOF_INTEGRATION
+                || driver_id == DriverId::TOF_PROXIMITY
+#endif
+            ) {
+                LOG_WARN("[DRV_MGR] Core driver failed, continuing: %s", name);
+                continue;
+            }
+
+            LOG_ERROR("[DRV_MGR] Core driver failed: %s", name);
             return false;
         }
     }
@@ -551,6 +569,25 @@ bool DriverManager::initializeDriver(DriverId id) {
             break;
         }
 
+#if DM_OPT_TOF_INTEGRATION
+        case DriverId::TOF_PROXIMITY: {
+            if (xTaskGetSchedulerState() == taskSCHEDULER_NOT_STARTED) {
+                LOG_INFO("[DRV_MGR] ToF Proximity deferred until scheduler starts");
+                setDriverState(id, DriverState::INITIALIZING);
+                return true;
+            }
+
+            auto& tof_mgr = TofProximityManager::getInstance();
+            if (!tof_mgr.init()) {
+                success = false;
+                LOG_ERROR("[DRV_MGR] ToF Proximity initialization failed");
+            } else {
+                tof_proximity_ptr = &tof_mgr;
+                LOG_INFO("[DRV_MGR] ToF Proximity initialized");
+            }
+            break;
+        }
+#else
         case DriverId::VL53L5CX_1:
         case DriverId::VL53L5CX_2:
         case DriverId::VL53L5CX_3:
@@ -562,6 +599,7 @@ bool DriverManager::initializeDriver(DriverId id) {
             success = true;
             break;
         }
+#endif
 
         case DriverId::BOOT_FUSE: {
             // Boot fuse system for bootloader/application selection
@@ -631,6 +669,7 @@ void DriverManager::setDriverState(DriverId id, DriverState state) {
     }
 
     states[static_cast<size_t>(id)] = state;
+    DriverHealthMonitor::setState(id, state);
 }
 
 // === Accessors: Singleton Drivers ===
@@ -693,14 +732,22 @@ TPS2121* DriverManager::getPowerSwitch(void) {
     return tps2121_ptr;
 }
 
+#if DM_OPT_TOF_INTEGRATION
+TofProximityManager* DriverManager::getTofProximity(void) {
+    if (states[static_cast<size_t>(DriverId::TOF_PROXIMITY)] != DriverState::READY) {
+        return nullptr;
+    }
+    return tof_proximity_ptr;
+}
+#else
 // === Accessors: Multi-Instance ===
-
 VL53L5CX* DriverManager::getToFSensor(uint8_t index) {
     if (index >= 6) {
         return nullptr;
     }
     return tof_sensors[index];
 }
+#endif
 
 TXS0108* DriverManager::getLevelShifter(void) {
     return txs0108_ptr;
@@ -740,9 +787,5 @@ DriverState DriverManager::getDriverState(DriverId id) {
 }
 
 const DriverHealth& DriverManager::getHealth(DriverId id) {
-    if (id >= DriverId::COUNT) {
-        static const DriverHealth null_health = {};
-        return null_health;
-    }
-    return health[static_cast<size_t>(id)];
+    return DriverHealthMonitor::getHealth(id);
 }

@@ -28,6 +28,7 @@
 #define __DRIVER_REGISTRY_HPP
 
 #include <cstdint>
+#include "dm_opts.h"
 #include <cstring>
 
 #ifdef __cplusplus
@@ -62,12 +63,16 @@ enum class DriverId : uint8_t {
     TXS0108,           // Level shifter, must init before PWM Motor control
 
     // Complex Sensors (Level 4 - depends on level shifter)
+#if DM_OPT_TOF_INTEGRATION
+    TOF_PROXIMITY,
+#else
     VL53L5CX_1,
     VL53L5CX_2,
     VL53L5CX_3,
     VL53L5CX_4,
     VL53L5CX_5,
     VL53L5CX_6,
+#endif
 
     // Peripherals (Level 3-4)
     ST7789,

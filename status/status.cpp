@@ -25,6 +25,7 @@
  * @brief   Task Status 
  */
 #include "status.hpp"
+#include "dm_opts.h"
 #include "driver_status.hpp"
 #include "rtc.hpp"
 #include "main.h"
@@ -45,15 +46,20 @@ void status_init(void) {
     status_init();
 
     const TickType_t delay = pdMS_TO_TICKS(50);
+    uint32_t tick = 0;
     while (1) {
         // Update RTC time for display
         rtc_update_status();
 
+#if DM_OPT_STATUS_DECOUPLED
+        DriverStatus::updateAllSensorsDecoupled(tick++);
+#else
         // Update all sensor readings with thread-safe mutex protection
         DriverStatus::updateStatus([](FalkraStatus& s) {
             s.lastUpdateMs = HAL_GetTick();
             DriverStatus::updateAllSensors(s);
         });
+#endif
 
         osDelay(delay);
     }

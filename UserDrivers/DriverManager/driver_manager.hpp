@@ -39,6 +39,7 @@
 #include <array>
 #include "driver_registry.hpp"
 #include "driver_health.hpp"
+#include "dm_opts.h"
 #include "user_config.h"
 
 // Forward declarations
@@ -59,6 +60,7 @@ class PPMDecoder;
 class RadioReceiver;
 class TPS2115;
 class TPS2121;
+class TofProximityManager;
 
 #ifdef __cplusplus
 extern "C" {
@@ -239,6 +241,13 @@ public:
      */
     TXS0108* getLevelShifter(void);
 
+#if DM_OPT_TOF_INTEGRATION
+    /**
+     * @brief Get ToF proximity subsystem manager
+     * @return Pointer to TofProximityManager, or nullptr if not initialized
+     */
+    TofProximityManager* getTofProximity(void);
+#else
     // === Multi-Instance Drivers ===
 
     /**
@@ -247,6 +256,7 @@ public:
      * @return Pointer to VL53L5CX, or nullptr if index out of range or not initialized
      */
     VL53L5CX* getToFSensor(uint8_t index);
+#endif
 
     // === Display & Audio ===
 
@@ -298,16 +308,16 @@ public:
      */
     const DriverHealth& getHealth(DriverId id);
 
-private:
-    DriverManager(void);
-    ~DriverManager(void);
-
     /**
      * @brief Initialize single driver with dependencies checked
      * @param id Driver ID to initialize
      * @return true if successful or already initialized
      */
     bool initializeDriver(DriverId id);
+
+private:
+    DriverManager(void);
+    ~DriverManager(void);
 
     /**
      * @brief Check if all dependencies for a driver are ready
@@ -338,7 +348,11 @@ private:
     BNO085* bno085_ptr = nullptr;
     BQ27441* bq27441_ptr = nullptr;
     TXS0108* txs0108_ptr = nullptr;
+#if DM_OPT_TOF_INTEGRATION
+    TofProximityManager* tof_proximity_ptr = nullptr;
+#else
     std::array<VL53L5CX*, 6> tof_sensors = {};
+#endif
     ST7789* st7789_ptr = nullptr;
     MAX98357* max98357_ptr = nullptr;
     AudioManager* audio_manager_ptr = nullptr;
@@ -349,7 +363,6 @@ private:
 
     // === State Tracking ===
     std::array<DriverState, static_cast<size_t>(DriverId::COUNT)> states;
-    std::array<DriverHealth, static_cast<size_t>(DriverId::COUNT)> health;
 
     bool initialized = false;
 

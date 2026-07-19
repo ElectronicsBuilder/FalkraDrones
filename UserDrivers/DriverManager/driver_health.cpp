@@ -27,6 +27,7 @@
 #include "driver_health.hpp"
 #include "driver_manager.hpp"
 #include "log.hpp"
+#include "main.h"
 #include <cstring>
 
 // Global health tracking array
@@ -101,6 +102,24 @@ void DriverHealthMonitor::reportWarning(DriverId id, const char* warning_msg) {
 
     LOG_WARN("[HEALTH] %s: %s (warning_count=%lu)",
              getDriverMetadata(id)->name, warning_msg, health.warning_count);
+}
+
+void DriverHealthMonitor::setState(DriverId id, DriverState state) {
+    if (id >= DriverId::COUNT) {
+        return;
+    }
+
+    auto& health = health_registry[static_cast<size_t>(id)];
+    health.state = state;
+    health.initialized = (state == DriverState::READY);
+    health.responding = (state == DriverState::READY || state == DriverState::DEGRADED);
+    health.last_response_ms = HAL_GetTick();
+    if (state == DriverState::READY) {
+        health.health_score = 100;
+        health.last_error[0] = '\0';
+    } else if (state == DriverState::ERROR) {
+        health.health_score = 0;
+    }
 }
 
 // === System Health Checks ===
