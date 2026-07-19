@@ -22,6 +22,7 @@
 #include "stm32f7xx_it.h"
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "tof_speed_opts.h"
 // #ifdef __cplusplus
 // extern "C" {
 // #endif
@@ -105,10 +106,15 @@ extern SPI_HandleTypeDef hspi4;
 extern TIM_HandleTypeDef htim2;
 extern DMA_HandleTypeDef hdma_usart1_rx;
 extern DMA_HandleTypeDef hdma_usart1_tx;
+extern I2C_HandleTypeDef hi2c1;
 extern UART_HandleTypeDef huart1;
 extern TIM_HandleTypeDef htim6;
 
 /* USER CODE BEGIN EV */
+#if TOF_OPT_I2C_DMA_MODE
+extern DMA_HandleTypeDef hdma_i2c1_rx;
+extern DMA_HandleTypeDef hdma_i2c1_tx;
+#endif
 
 /* USER CODE END EV */
 
@@ -496,6 +502,40 @@ void QUADSPI_IRQHandler(void)
 }
 
 /* USER CODE BEGIN 1 */
+
+#if TOF_OPT_I2C_DMA_MODE
+/*
+ * I2C1 DMA streams are reserved for ToF when DMA mode is enabled:
+ * RX = DMA1 Stream0 Channel1, TX = DMA1 Stream6 Channel1.
+ * If CubeMX later generates these handlers, remove this user-section copy.
+ */
+void DMA1_Stream0_IRQHandler(void)
+{
+  HAL_DMA_IRQHandler(&hdma_i2c1_rx);
+}
+
+void DMA1_Stream6_IRQHandler(void)
+{
+  HAL_DMA_IRQHandler(&hdma_i2c1_tx);
+}
+#endif
+
+#if TOF_OPT_I2C_ASYNC_MODE
+/*
+ * I2C1 NVIC lines are disabled in CubeMX today. These handlers provide the
+ * strong symbols needed for ToF async transfers. If CubeMX later generates
+ * I2C1_EV_IRQHandler/I2C1_ER_IRQHandler, remove this user-section copy.
+ */
+void I2C1_EV_IRQHandler(void)
+{
+  HAL_I2C_EV_IRQHandler(&hi2c1);
+}
+
+void I2C1_ER_IRQHandler(void)
+{
+  HAL_I2C_ER_IRQHandler(&hi2c1);
+}
+#endif
 
 /**
   * @brief  EXTI line detection callback for ToF sensors

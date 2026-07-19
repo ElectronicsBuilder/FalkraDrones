@@ -20,6 +20,13 @@
 /* Includes ------------------------------------------------------------------*/
 #include "stm32f7xx_custom_bus.h"
 #include <main.h>
+#include "tof_speed_opts.h"
+
+#if TOF_OPT_I2C_ASYNC_MODE
+#include "FreeRTOS.h"
+#include "task.h"
+#include "semphr.h"
+#endif
 
 #define USE_CUBEMX_BSP_V2 0
 
@@ -60,6 +67,189 @@ I2C_HandleTypeDef hi2c1;
 static uint32_t IsI2C1MspCbValid = 0;
 #endif /* USE_HAL_I2C_REGISTER_CALLBACKS */
 static uint32_t I2C1InitCounter = 0;
+
+#if TOF_OPT_I2C_ASYNC_MODE
+#if TOF_OPT_I2C_DMA_MODE
+DMA_HandleTypeDef hdma_i2c1_rx;
+DMA_HandleTypeDef hdma_i2c1_tx;
+static uint8_t i2c1_dma_ready = 0;
+#endif
+
+static SemaphoreHandle_t i2c1_it_done = NULL;
+static StaticSemaphore_t i2c1_it_done_buf;
+static volatile HAL_StatusTypeDef i2c1_it_status = HAL_OK;
+static volatile uint32_t i2c1_it_error = HAL_I2C_ERROR_NONE;
+static volatile uint16_t i2c1_it_dev_addr = 0;
+
+static int32_t BSP_I2C1_AsyncInit(void)
+{
+  if (i2c1_it_done == NULL)
+  {
+    i2c1_it_done = xSemaphoreCreateBinaryStatic(&i2c1_it_done_buf);
+    if (i2c1_it_done == NULL)
+    {
+      return BSP_ERROR_PERIPH_FAILURE;
+    }
+  }
+
+  while (xSemaphoreTake(i2c1_it_done, 0) == pdTRUE)
+  {
+  }
+
+  i2c1_it_status = HAL_OK;
+  i2c1_it_error = HAL_I2C_ERROR_NONE;
+#if TOF_OPT_I2C_DMA_MODE
+  if (!i2c1_dma_ready)
+  {
+    __HAL_RCC_DMA1_CLK_ENABLE();
+
+    hdma_i2c1_rx.Instance = DMA1_Stream0;
+    hdma_i2c1_rx.Init.Channel = DMA_CHANNEL_1;
+    hdma_i2c1_rx.Init.Direction = DMA_PERIPH_TO_MEMORY;
+    hdma_i2c1_rx.Init.PeriphInc = DMA_PINC_DISABLE;
+    hdma_i2c1_rx.Init.MemInc = DMA_MINC_ENABLE;
+    hdma_i2c1_rx.Init.PeriphDataAlignment = DMA_PDATAALIGN_BYTE;
+    hdma_i2c1_rx.Init.MemDataAlignment = DMA_MDATAALIGN_BYTE;
+    hdma_i2c1_rx.Init.Mode = DMA_NORMAL;
+    hdma_i2c1_rx.Init.Priority = DMA_PRIORITY_HIGH;
+    hdma_i2c1_rx.Init.FIFOMode = DMA_FIFOMODE_DISABLE;
+    if (HAL_DMA_Init(&hdma_i2c1_rx) != HAL_OK)
+    {
+      return BSP_ERROR_PERIPH_FAILURE;
+    }
+    __HAL_LINKDMA(&hi2c1, hdmarx, hdma_i2c1_rx);
+
+    hdma_i2c1_tx.Instance = DMA1_Stream6;
+    hdma_i2c1_tx.Init.Channel = DMA_CHANNEL_1;
+    hdma_i2c1_tx.Init.Direction = DMA_MEMORY_TO_PERIPH;
+    hdma_i2c1_tx.Init.PeriphInc = DMA_PINC_DISABLE;
+    hdma_i2c1_tx.Init.MemInc = DMA_MINC_ENABLE;
+    hdma_i2c1_tx.Init.PeriphDataAlignment = DMA_PDATAALIGN_BYTE;
+    hdma_i2c1_tx.Init.MemDataAlignment = DMA_MDATAALIGN_BYTE;
+    hdma_i2c1_tx.Init.Mode = DMA_NORMAL;
+    hdma_i2c1_tx.Init.Priority = DMA_PRIORITY_HIGH;
+    hdma_i2c1_tx.Init.FIFOMode = DMA_FIFOMODE_DISABLE;
+    if (HAL_DMA_Init(&hdma_i2c1_tx) != HAL_OK)
+    {
+      return BSP_ERROR_PERIPH_FAILURE;
+    }
+    __HAL_LINKDMA(&hi2c1, hdmatx, hdma_i2c1_tx);
+
+    HAL_NVIC_SetPriority(DMA1_Stream0_IRQn, 5, 0);
+    HAL_NVIC_EnableIRQ(DMA1_Stream0_IRQn);
+    HAL_NVIC_SetPriority(DMA1_Stream6_IRQn, 5, 0);
+    HAL_NVIC_EnableIRQ(DMA1_Stream6_IRQn);
+
+    i2c1_dma_ready = 1;
+  }
+#endif
+
+  return BSP_ERROR_NONE;
+}
+
+static int32_t BSP_I2C1_MapError(uint32_t error)
+{
+  return (error == HAL_I2C_ERROR_AF) ? BSP_ERROR_BUS_ACKNOWLEDGE_FAILURE
+                                     : BSP_ERROR_PERIPH_FAILURE;
+}
+
+static int32_t BSP_I2C1_WaitIT(void)
+{
+  if (xSemaphoreTake(i2c1_it_done, pdMS_TO_TICKS(BUS_I2C1_POLL_TIMEOUT)) != pdTRUE)
+  {
+    (void)HAL_I2C_Master_Abort_IT(&hi2c1, i2c1_it_dev_addr);
+    return BSP_ERROR_PERIPH_FAILURE;
+  }
+
+  if (i2c1_it_status != HAL_OK)
+  {
+    return BSP_I2C1_MapError(i2c1_it_error);
+  }
+
+  return BSP_ERROR_NONE;
+}
+
+static void BSP_I2C1_CompleteFromISR(I2C_HandleTypeDef *hi2c, HAL_StatusTypeDef status)
+{
+  if (hi2c->Instance != I2C1 || i2c1_it_done == NULL)
+  {
+    return;
+  }
+
+  i2c1_it_status = status;
+  i2c1_it_error = HAL_I2C_GetError(hi2c);
+
+  BaseType_t higher_priority_task_woken = pdFALSE;
+  xSemaphoreGiveFromISR(i2c1_it_done, &higher_priority_task_woken);
+  portYIELD_FROM_ISR(higher_priority_task_woken);
+}
+
+static int32_t BSP_I2C1_MemWrite(uint16_t DevAddr,
+                                 uint16_t Reg,
+                                 uint16_t MemAddSize,
+                                 uint8_t *pData,
+                                 uint16_t Length)
+{
+  if (xTaskGetSchedulerState() != taskSCHEDULER_RUNNING)
+  {
+    if (HAL_I2C_Mem_Write(&hi2c1, DevAddr, Reg, MemAddSize, pData, Length, BUS_I2C1_POLL_TIMEOUT) != HAL_OK)
+    {
+      return BSP_I2C1_MapError(HAL_I2C_GetError(&hi2c1));
+    }
+    return BSP_ERROR_NONE;
+  }
+
+  if (BSP_I2C1_AsyncInit() != BSP_ERROR_NONE)
+  {
+    return BSP_ERROR_PERIPH_FAILURE;
+  }
+
+  i2c1_it_dev_addr = DevAddr;
+#if TOF_OPT_I2C_DMA_MODE
+  if (HAL_I2C_Mem_Write_DMA(&hi2c1, DevAddr, Reg, MemAddSize, pData, Length) != HAL_OK)
+#else
+  if (HAL_I2C_Mem_Write_IT(&hi2c1, DevAddr, Reg, MemAddSize, pData, Length) != HAL_OK)
+#endif
+  {
+    return BSP_I2C1_MapError(HAL_I2C_GetError(&hi2c1));
+  }
+
+  return BSP_I2C1_WaitIT();
+}
+
+static int32_t BSP_I2C1_MemRead(uint16_t DevAddr,
+                                uint16_t Reg,
+                                uint16_t MemAddSize,
+                                uint8_t *pData,
+                                uint16_t Length)
+{
+  if (xTaskGetSchedulerState() != taskSCHEDULER_RUNNING)
+  {
+    if (HAL_I2C_Mem_Read(&hi2c1, DevAddr, Reg, MemAddSize, pData, Length, BUS_I2C1_POLL_TIMEOUT) != HAL_OK)
+    {
+      return BSP_I2C1_MapError(HAL_I2C_GetError(&hi2c1));
+    }
+    return BSP_ERROR_NONE;
+  }
+
+  if (BSP_I2C1_AsyncInit() != BSP_ERROR_NONE)
+  {
+    return BSP_ERROR_PERIPH_FAILURE;
+  }
+
+  i2c1_it_dev_addr = DevAddr;
+#if TOF_OPT_I2C_DMA_MODE
+  if (HAL_I2C_Mem_Read_DMA(&hi2c1, DevAddr, Reg, MemAddSize, pData, Length) != HAL_OK)
+#else
+  if (HAL_I2C_Mem_Read_IT(&hi2c1, DevAddr, Reg, MemAddSize, pData, Length) != HAL_OK)
+#endif
+  {
+    return BSP_I2C1_MapError(HAL_I2C_GetError(&hi2c1));
+  }
+
+  return BSP_I2C1_WaitIT();
+}
+#endif
 
 /**
   * @}
@@ -205,6 +395,9 @@ int32_t BSP_I2C1_WriteReg(uint16_t DevAddr, uint16_t Reg, uint8_t *pData, uint16
 {
   int32_t ret = BSP_ERROR_NONE;
 
+#if TOF_OPT_I2C_ASYNC_MODE
+  ret = BSP_I2C1_MemWrite(DevAddr, Reg, I2C_MEMADD_SIZE_8BIT, pData, Length);
+#else
   if (HAL_I2C_Mem_Write(&hi2c1, DevAddr,Reg, I2C_MEMADD_SIZE_8BIT,pData, Length, BUS_I2C1_POLL_TIMEOUT) != HAL_OK)
   {
     if (HAL_I2C_GetError(&hi2c1) == HAL_I2C_ERROR_AF)
@@ -216,6 +409,7 @@ int32_t BSP_I2C1_WriteReg(uint16_t DevAddr, uint16_t Reg, uint8_t *pData, uint16
       ret =  BSP_ERROR_PERIPH_FAILURE;
     }
   }
+#endif
   return ret;
 }
 
@@ -231,6 +425,9 @@ int32_t  BSP_I2C1_ReadReg(uint16_t DevAddr, uint16_t Reg, uint8_t *pData, uint16
 {
   int32_t ret = BSP_ERROR_NONE;
 
+#if TOF_OPT_I2C_ASYNC_MODE
+  ret = BSP_I2C1_MemRead(DevAddr, Reg, I2C_MEMADD_SIZE_8BIT, pData, Length);
+#else
   if (HAL_I2C_Mem_Read(&hi2c1, DevAddr, Reg, I2C_MEMADD_SIZE_8BIT, pData, Length, BUS_I2C1_POLL_TIMEOUT) != HAL_OK)
   {
     if (HAL_I2C_GetError(&hi2c1) == HAL_I2C_ERROR_AF)
@@ -242,6 +439,7 @@ int32_t  BSP_I2C1_ReadReg(uint16_t DevAddr, uint16_t Reg, uint8_t *pData, uint16
       ret = BSP_ERROR_PERIPH_FAILURE;
     }
   }
+#endif
   return ret;
 }
 
@@ -263,6 +461,9 @@ int32_t BSP_I2C1_WriteReg16(uint16_t DevAddr, uint16_t Reg, uint8_t *pData, uint
 {
   int32_t ret = BSP_ERROR_NONE;
 
+#if TOF_OPT_I2C_ASYNC_MODE
+  ret = BSP_I2C1_MemWrite(DevAddr, Reg, I2C_MEMADD_SIZE_16BIT, pData, Length);
+#else
   if (HAL_I2C_Mem_Write(&hi2c1, DevAddr, Reg, I2C_MEMADD_SIZE_16BIT, pData, Length, BUS_I2C1_POLL_TIMEOUT) != HAL_OK)
 //	  if (HAL_I2C_Mem_Write_IT(&hi2c1, DevAddr, Reg, I2C_MEMADD_SIZE_16BIT, pData, Length) != HAL_OK)
   {
@@ -275,6 +476,7 @@ int32_t BSP_I2C1_WriteReg16(uint16_t DevAddr, uint16_t Reg, uint8_t *pData, uint
       ret =  BSP_ERROR_PERIPH_FAILURE;
     }
   }
+#endif
   return ret;
 }
 
@@ -289,6 +491,9 @@ int32_t  BSP_I2C1_ReadReg16(uint16_t DevAddr, uint16_t Reg, uint8_t *pData, uint
 {
   int32_t ret = BSP_ERROR_NONE;
 
+#if TOF_OPT_I2C_ASYNC_MODE
+  ret = BSP_I2C1_MemRead(DevAddr, Reg, I2C_MEMADD_SIZE_16BIT, pData, Length);
+#else
   if (HAL_I2C_Mem_Read(&hi2c1, DevAddr, Reg, I2C_MEMADD_SIZE_16BIT, pData, Length, BUS_I2C1_POLL_TIMEOUT) != HAL_OK)
 //	  if (HAL_I2C_Mem_Read_IT(&hi2c1, DevAddr, Reg, I2C_MEMADD_SIZE_16BIT, pData, Length) != HAL_OK)
   {
@@ -301,8 +506,26 @@ int32_t  BSP_I2C1_ReadReg16(uint16_t DevAddr, uint16_t Reg, uint8_t *pData, uint
       ret =  BSP_ERROR_PERIPH_FAILURE;
     }
   }
+#endif
   return ret;
 }
+
+#if TOF_OPT_I2C_ASYNC_MODE
+void HAL_I2C_MemTxCpltCallback(I2C_HandleTypeDef *hi2c)
+{
+  BSP_I2C1_CompleteFromISR(hi2c, HAL_OK);
+}
+
+void HAL_I2C_MemRxCpltCallback(I2C_HandleTypeDef *hi2c)
+{
+  BSP_I2C1_CompleteFromISR(hi2c, HAL_OK);
+}
+
+void HAL_I2C_ErrorCallback(I2C_HandleTypeDef *hi2c)
+{
+  BSP_I2C1_CompleteFromISR(hi2c, HAL_ERROR);
+}
+#endif
 
 /**
   * @brief  Send an amount width data through bus (Simplex)
@@ -426,7 +649,7 @@ __weak HAL_StatusTypeDef BSP_MX_I2C1_Init(I2C_HandleTypeDef* hi2c)
   //hi2c->Init.DutyCycle = I2C_DUTYCYCLE_2;
 
 
-  hi2c->Init.Timing = 0x60000030D;
+  hi2c->Init.Timing = 0x6000030D;
   //hi2c->Init.Timing = 0x20404768;
   //  hi2c->Init.Timing = 0x40808ED0;
 
@@ -514,4 +737,3 @@ static void I2C1_MspDeInit(I2C_HandleTypeDef* i2cHandle)
 /**
   * @}
   */
-

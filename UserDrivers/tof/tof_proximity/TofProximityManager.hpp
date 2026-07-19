@@ -110,6 +110,8 @@ public:
 
     bool getSnapshot(TofDistanceSnapshot* snapshot);
     bool getSensorDistance(TofSensorId id, uint16_t* mm);
+    uint32_t getLastUpdateMs(uint8_t sensorIndex) const;
+    uint32_t getPresentMask() const;
 
     TofSensor& getSensor(TofSensorId id);
     const TofSensor& getSensor(TofSensorId id) const;
@@ -173,6 +175,7 @@ private:
 #endif
 
     TofDistanceSnapshot _currentSnapshot = {};
+    uint32_t _lastUpdateMs[MAX_TOF_SENSORS] = {};
 
     bool _initialized = false;
     bool _ranging = false;

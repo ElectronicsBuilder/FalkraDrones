@@ -61,6 +61,13 @@
 *******************************************************************************/
 
 #include "platform.h"
+#include "tof_speed_opts.h"
+
+#if TOF_OPT_I2C_ASYNC_MODE
+#include "cmsis_os.h"
+#include "FreeRTOS.h"
+#include "task.h"
+#endif
 
 uint8_t RdByte(
 		VL53L5CX_Platform *p_platform,
@@ -119,6 +126,14 @@ uint8_t WaitMs(
 		VL53L5CX_Platform *p_platform,
 		uint32_t TimeMs)
 {
+#if TOF_OPT_I2C_ASYNC_MODE
+  if (xTaskGetSchedulerState() == taskSCHEDULER_RUNNING)
+  {
+    osDelay(TimeMs);
+    return 0;
+  }
+#endif
+
   uint32_t tickstart;
   tickstart = p_platform->GetTick();
 
@@ -126,4 +141,3 @@ uint8_t WaitMs(
 
   return 0;
 }
-

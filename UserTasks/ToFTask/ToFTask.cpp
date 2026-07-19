@@ -28,6 +28,8 @@
 
 #include "ToFTask.hpp"
 #include "TofProximityManager.hpp"
+#include "driver_manager.hpp"
+#include "dm_opts.h"
 #include "app_tof.hpp"
 
 #include "log.hpp"
@@ -52,14 +54,32 @@ void tof_task(void *argument) {
 
     LOG_INFO("[TOF_TASK] ToF task started");
 
-    auto& mgr = TofProximityManager::getInstance();
+#if DM_OPT_TOF_INTEGRATION
+    auto& dm = DriverManager::getInstance();
+    if (!dm.initializeDriver(DriverId::TOF_PROXIMITY)) {
+        LOG_ERROR("[TOF_TASK] Failed to initialize ToF through DriverManager");
+        while (1) {
+            osDelay(1000);
+        }
+    }
 
+    auto* mgr_ptr = dm.getTofProximity();
+    if (mgr_ptr == nullptr) {
+        LOG_ERROR("[TOF_TASK] DriverManager did not return ToF proximity manager");
+        while (1) {
+            osDelay(1000);
+        }
+    }
+    auto& mgr = *mgr_ptr;
+#else
+    auto& mgr = TofProximityManager::getInstance();
     if (!mgr.init(PROXIMITY_DETECT_DISTANCE_CM, PROXIMITY_MIN_DISTANCE_CM)) {
         LOG_ERROR("[TOF_TASK] Failed to initialize TofProximityManager");
         while (1) {
             osDelay(1000);
         }
     }
+#endif
 
     mgr.enableInterruptMode(true);
     mgr.setHighSpeedMode(true);

@@ -18,6 +18,7 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "vl53l5cx.h"
+#include "tof_speed_opts.h"
 
 /** @addtogroup BSP
   * @{
@@ -443,10 +444,17 @@ int32_t VL53L5CX_GetDistance(VL53L5CX_Object_t *pObj, VL53L5CX_Result_t *pResult
     {
       ret = vl53l5cx_poll_for_measurement(pObj, V53L5CX_POLL_TIMEOUT);
     }
+#if TOF_OPT_I2C_ASYNC_MODE
+    else
+    {
+      ret = VL53L5CX_OK;
+    }
+#else
     else
     {
       ret = vl53l5cx_poll_for_measurement(pObj, 0U);
     }
+#endif
   }
 
   /* a new measure is available if no error is returned by the poll function */

@@ -28,6 +28,7 @@
 #include "TofProximityManager.hpp"
 #include "tof_interrupts.h"
 #include "tof_perf.h"
+#include "dm_opts.h"
 #include "gpio_interrupts.h"
 #include "app_tof.hpp"
 #include "status.hpp"
@@ -41,7 +42,7 @@ static const char* SENSOR_NAMES[MAX_TOF_SENSORS] = {
     "TOP", "BOTTOM", "FRONT", "BACK", "LEFT", "RIGHT"
 };
 
-static uint16_t tof_internal_to_cm(uint16_t distance)
+[[maybe_unused]] static uint16_t tof_internal_to_cm(uint16_t distance)
 {
 #if TOF_OPT_MM_RESOLUTION
     return distance / 10U;
@@ -102,10 +103,12 @@ bool TofProximityManager::init(uint16_t detectCm, uint16_t minCm) {
         _sensors[i].configure(id, SENSOR_NAMES[i]);
         _sensors[i].setThreshold(detectCm, minCm);
 
+#if !DM_OPT_TOF_INTEGRATION
         strncpy(g_status.tofDeviceName[i], SENSOR_NAMES[i], sizeof(g_status.tofDeviceName[i]) - 1);
         g_status.tofDeviceName[i][sizeof(g_status.tofDeviceName[i]) - 1] = '\0';
         g_status.tofDeviceLoc[i] = i;
         g_status.tofSensorDistance[i] = 0;
+#endif
     }
 
     std::memset(&_currentSnapshot, 0, sizeof(_currentSnapshot));
@@ -143,6 +146,14 @@ void TofProximityManager::startRanging() {
 
     MX_TOF_Start();
     _ranging = true;
+
+    uint32_t now = HAL_GetTick();
+    for (uint8_t i = 0; i < MAX_TOF_SENSORS; i++) {
+        if (_sensors[i].isPresent()) {
+            _lastUpdateMs[i] = now;
+        }
+    }
+
     LOG_INFO("[TOF_MGR] Ranging started");
 }
 
@@ -232,15 +243,22 @@ void TofProximityManager::readSensorOnInterrupt(uint8_t sensorIndex) {
         _sensors[sensorIndex].updateZoneData(proximity_devices[sensorIndex], MAX_ZONES_PER_SENSOR);
 
         // Update detection state for this sensor
+#if TOF_DETECTION_LOG
         TofDetectionFlag prevFlag = _sensors[sensorIndex].getDetectionFlag();
+#endif
         _sensors[sensorIndex].updateDetectionState();
+#if !DM_OPT_TOF_INTEGRATION || TOF_DETECTION_LOG
         TofDetectionFlag newFlag = _sensors[sensorIndex].getDetectionFlag();
+#endif
 
+#if !DM_OPT_TOF_INTEGRATION
         // Update global status
         g_status.tofDetectingFlag[sensorIndex] = static_cast<uint8_t>(newFlag);
         g_status.tofSensorDistance[sensorIndex] =
             tof_internal_to_cm(_sensors[sensorIndex].getZoneDistance(0));
+#endif
 
+#if TOF_DETECTION_LOG
         // Log detection state changes
         if (newFlag != prevFlag) {
             const char* flagStr =
@@ -253,6 +271,7 @@ void TofProximityManager::readSensorOnInterrupt(uint8_t sensorIndex) {
                 flagStr,
                 _sensors[sensorIndex].getConfidence());
         }
+#endif
     }
 }
 
@@ -299,14 +318,21 @@ void TofProximityManager::updateAllDetectionStates() {
             continue;
         }
 
+#if TOF_DETECTION_LOG
         TofDetectionFlag prevFlag = _sensors[i].getDetectionFlag();
+#endif
         _sensors[i].updateDetectionState();
+#if !DM_OPT_TOF_INTEGRATION || TOF_DETECTION_LOG
         TofDetectionFlag newFlag = _sensors[i].getDetectionFlag();
+#endif
 
+#if !DM_OPT_TOF_INTEGRATION
         g_status.tofDetectingFlag[i] = static_cast<uint8_t>(newFlag);
         g_status.tofSensorDistance[i] =
             tof_internal_to_cm(_sensors[i].getZoneDistance(0));
+#endif
 
+#if TOF_DETECTION_LOG
         if (newFlag != prevFlag) {
             const char* flagStr =
                 (newFlag == TofDetectionFlag::Set) ? "SET" :
@@ -318,6 +344,7 @@ void TofProximityManager::updateAllDetectionStates() {
                 flagStr,
                 _sensors[i].getConfidence());
         }
+#endif
     }
 }
 
@@ -398,6 +425,23 @@ bool TofProximityManager::getSensorDistance(TofSensorId id, uint16_t* mm) {
     return valid;
 }
 
+uint32_t TofProximityManager::getLastUpdateMs(uint8_t sensorIndex) const {
+    if (sensorIndex >= MAX_TOF_SENSORS) {
+        return 0;
+    }
+    return _lastUpdateMs[sensorIndex];
+}
+
+uint32_t TofProximityManager::getPresentMask() const {
+    uint32_t mask = 0;
+    for (uint8_t i = 0; i < MAX_TOF_SENSORS; i++) {
+        if (_sensors[i].isPresent()) {
+            mask |= (1u << i);
+        }
+    }
+    return mask;
+}
+
 TofSensor& TofProximityManager::getSensor(TofSensorId id) {
     uint8_t idx = static_cast<uint8_t>(id);
     if (idx >= MAX_TOF_SENSORS) {
@@ -466,8 +510,13 @@ void TofProximityManager::syncSensorPresence() {
     for (uint8_t i = 0; i < MAX_TOF_SENSORS; i++) {
         bool present = (MX_TOF_IsSensorPresent(i) == 1);
         _sensors[i].setPresent(present);
+        if (present) {
+            _lastUpdateMs[i] = HAL_GetTick();
+        }
 
+#if !DM_OPT_TOF_INTEGRATION
         g_status.tofDeviceStatus[i] = present ? 1 : 0;
+#endif
 
         if (present) {
             activeCount++;
@@ -533,6 +582,7 @@ void TofProximityManager::dataTask() {
         }
 #endif
 
+        bool processed = false;
         for (uint8_t i = 0; i < MAX_TOF_SENSORS; i++) {
             if (!(flags & (1u << i))) {
                 continue;
@@ -544,11 +594,19 @@ void TofProximityManager::dataTask() {
 
             if (TOF_PERF_READ_SENSOR(i, MX_TOF_ReadSensorDistance)) {
                 _sensors[i].updateZoneData(proximity_devices[i], MAX_ZONES_PER_SENSOR);
+                _lastUpdateMs[i] = HAL_GetTick();
                 osEventFlagsSet(_newDataFlags, (1u << i));
+                processed = true;
 #if TOF_OPT_DIRECT_NOTIFY
                 taskYIELD();
 #endif
             }
+        }
+
+        if (processed) {
+#if !TOF_OPT_I2C_ASYNC_MODE
+            osDelay(1);
+#endif
         }
     }
 }
@@ -593,14 +651,21 @@ void TofProximityManager::detectionTask() {
                 continue;
             }
 
+#if TOF_DETECTION_LOG
             TofDetectionFlag prevFlag = _sensors[i].getDetectionFlag();
+#endif
             _sensors[i].updateDetectionState();
+#if !DM_OPT_TOF_INTEGRATION || TOF_DETECTION_LOG
             TofDetectionFlag newFlag = _sensors[i].getDetectionFlag();
+#endif
 
+#if !DM_OPT_TOF_INTEGRATION
             g_status.tofDetectingFlag[i] = static_cast<uint8_t>(newFlag);
             g_status.tofSensorDistance[i] =
                 tof_internal_to_cm(_sensors[i].getZoneDistance(0));
+#endif
 
+#if TOF_DETECTION_LOG
             if (newFlag != prevFlag) {
                 const char* flagStr =
                     (newFlag == TofDetectionFlag::Set)   ? "SET"   :
@@ -612,6 +677,7 @@ void TofProximityManager::detectionTask() {
                     flagStr,
                     _sensors[i].getConfidence());
             }
+#endif
         }
 
         if (_logEnabled) {

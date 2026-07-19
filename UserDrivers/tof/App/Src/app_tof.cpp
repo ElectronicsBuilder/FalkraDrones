@@ -39,6 +39,7 @@ extern "C" {
 #include "status.hpp"
 #include "log.hpp"
 #include "tof_speed_opts.h"
+#include "dm_opts.h"
 
 
 
@@ -54,7 +55,7 @@ RANGING_SENSOR_Result_t Result;
 
 /* Private define ------------------------------------------------------------*/
 #define TIMING_BUDGET (5U)  //(15U) /* 15 ms timing budget (balanced accuracy/speed) */
-#define RANGING_FREQUENCY (60U) /* 60 Hz ranging frequency (VL53L5CX max at 4x4) */
+#define RANGING_FREQUENCY (TOF_RANGING_FREQUENCY_HZ) /* Per-sensor ranging frequency */
 #define POLLING_PERIOD (1000U/RANGING_FREQUENCY) /* refresh rate for polling mode (milliseconds) */
 
 /* Private variables ---------------------------------------------------------*/
@@ -266,8 +267,10 @@ void MX_TOF_SyncSensorStatus(void) {
                 sensors[i].status == sensor_active ? "ACTIVE" : "INACTIVE");
         }
 
+#if !DM_OPT_TOF_INTEGRATION
         // Update global status structure
         g_status.tofDeviceStatus[i] = sensors[i].status;
+#endif
     }
 
     LOG_INFO("[TOF_SYNC] Active sensors: %u/%u", g_tof_index_map.active_count, MAX_TOF_SENSOR);
@@ -318,6 +321,21 @@ static void MX_53L5A1_MultiSensorRanging_Start(void)
 
         active_index++;
     }
+
+#if TOF_PAYLOAD_PROBE
+    LOG_INFO("[TOF] I2C1 TIMINGR=0x%08lX", (unsigned long)hi2c1.Instance->TIMINGR);
+    for (uint8_t bsp_idx = 0; bsp_idx < active_index; bsp_idx++)
+    {
+        VL53L5CX_Object_t *pObj =
+            (VL53L5CX_Object_t *)VL53L5A1_RANGING_SENSOR_CompObj[bsp_idx];
+        if (pObj != NULL)
+        {
+            LOG_INFO("[TOF] data_read_size[%u]=%lu",
+                bsp_idx,
+                (unsigned long)pObj->Dev.data_read_size);
+        }
+    }
+#endif
 }
 
 

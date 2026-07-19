@@ -130,7 +130,7 @@ const osThreadAttr_t heartbeatTask_attributes = {
 	.cb_mem = NULL,
 	.cb_size = 0,
 	.stack_mem = NULL,
-	.stack_size = 256 * 1,
+	.stack_size = 1024,
 	.priority = (osPriority_t)osPriorityNormal,
 	.tz_module = 0,
 	.reserved = 0
@@ -280,7 +280,11 @@ const osThreadAttr_t ToFTask_attributes = {
     .stack_mem = NULL,
     .stack_size = 2048 * 2,
 #if TOF_OPT_TASK_PRIORITY
+#if TOF_OPT_I2C_ASYNC_MODE
     .priority = (osPriority_t)osPriorityHigh,
+#else
+    .priority = (osPriority_t)osPriorityAboveNormal,
+#endif
 #else
     .priority = (osPriority_t)osPriorityNormal,
 #endif
@@ -297,7 +301,11 @@ const osThreadAttr_t ToFDistanceTask_attributes = {
     .stack_mem = NULL,
 #if TOF_OPT_TASK_PRIORITY
     .stack_size = 2048,
+#if TOF_OPT_I2C_ASYNC_MODE
     .priority = (osPriority_t)osPriorityAboveNormal,
+#else
+    .priority = (osPriority_t)osPriorityNormal,
+#endif
 #else
     .stack_size = 1024 * 1,
     .priority = (osPriority_t)osPriorityNormal,
@@ -432,6 +440,25 @@ void main_cpp(void)
     ToFDistanceTaskHandle               = osThreadNew(tof_detection_task, NULL, &ToFDistanceTask_attributes);
   //  MotorControlTaskHandle              = osThreadNew(MotorControlTask, NULL, &MotorControlTask_attributes);
    // tcpServerTaskHandle                 = osThreadNew(tcpServerTask, NULL, &tcpServerTask_attributes);
+
+    if (!heartbeatTask_TaskHandle) {
+        LOG_ERROR("[MAIN] Failed to create heartbeat task");
+    }
+    if (!UARTTask_TaskHandle) {
+        LOG_ERROR("[MAIN] Failed to create UART task");
+    }
+    if (!GUI_TaskHandle) {
+        LOG_ERROR("[MAIN] Failed to create GUI task");
+    }
+    if (!DISPLAY_TaskHandle) {
+        LOG_ERROR("[MAIN] Failed to create display task");
+    }
+    if (!statusTaskHandle) {
+        LOG_ERROR("[MAIN] Failed to create status task");
+    }
+    if (!ToFTaskHandle || !ToFDistanceTaskHandle) {
+        LOG_ERROR("[MAIN] Failed to create ToF task(s)");
+    }
 
     
     LOG_INFO("About to start FreeRTOS kernel...");
@@ -711,4 +738,3 @@ static void waitWifiInit(void)
     } while (wifiDriverInit != true);
     
 }
-

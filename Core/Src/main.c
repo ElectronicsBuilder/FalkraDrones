@@ -507,6 +507,12 @@ void MX_I2C1_Init(void)
     Error_Handler();
   }
 #endif
+#if TOF_OPT_I2C_ASYNC_MODE
+  HAL_NVIC_SetPriority(I2C1_EV_IRQn, 5, 0);
+  HAL_NVIC_EnableIRQ(I2C1_EV_IRQn);
+  HAL_NVIC_SetPriority(I2C1_ER_IRQn, 5, 0);
+  HAL_NVIC_EnableIRQ(I2C1_ER_IRQn);
+#endif
   /* USER CODE END I2C1_Init 2 */
 
 }
