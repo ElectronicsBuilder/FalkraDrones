@@ -199,6 +199,7 @@ def save_json(path: Path, port: str, baud: int, seconds: float, samples: list[di
         "samples": samples,
         "summary": summarize(samples),
     }
+    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
 

@@ -13,6 +13,7 @@ import serial
 import sys
 import time
 import re
+from pathlib import Path
 
 PORT = "COM14"
 BAUD = 3000000
@@ -43,7 +44,9 @@ def run(cmd_to_send, seconds, outfile=None, until=None):
     s.close()
     text = ANSI.sub("", data.decode("utf-8", errors="replace"))
     if outfile:
-        with open(outfile, "w", encoding="utf-8") as f:
+        outfile_path = Path(outfile)
+        outfile_path.parent.mkdir(parents=True, exist_ok=True)
+        with outfile_path.open("w", encoding="utf-8") as f:
             f.write(text)
         print(f"--- {len(data)} bytes -> {outfile} ---")
     print(text)
