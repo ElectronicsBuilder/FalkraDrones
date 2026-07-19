@@ -50,6 +50,7 @@ void uart_set_transport_mode(app_uart_mode_t mode);
 
 // Transport interface
 bool uart_data_available(void);
+bool uart_rx_pending(void);   // non-consuming: unread RX bytes exist (see uart.cpp)
 int  uart_read_buffer(uint8_t *buf, size_t len);
 void uart_send_string(const char *msg);
 void uart_send_bytes(const uint8_t *data, size_t len);

@@ -104,6 +104,22 @@ bool uart_data_available(void) {
     }
 }
 
+bool uart_rx_pending(void) {
+    // Non-consuming check for unread RX bytes. Unlike uart_data_available(),
+    // the DMA case compares the actual ring position, so this is usable as an
+    // "operator typed something" signal inside long-running console commands.
+    switch (uart_mode) {
+        case UART_MODE_IRQ:
+            return !ring_buffer_empty();
+        case UART_MODE_DMA: {
+            uint16_t current_pos = UART_DMA_BUFFER_SIZE - __HAL_DMA_GET_COUNTER(huart1.hdmarx);
+            return last_pos != current_pos;
+        }
+        default:
+            return false;
+    }
+}
+
 int uart_read_buffer(uint8_t *buf, size_t len) {
     if (!buf || len == 0) return 0;
     int read = 0;

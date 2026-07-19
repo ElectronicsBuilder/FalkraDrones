@@ -8,6 +8,7 @@
  *
  * Commands:
  *   TOF_STATUS          - One-shot snapshot of all 6 sensor distances
+ *   TOF_WATCH [sec]     - Live one-line distance display, updates in place
  *   TOF_LOG ON          - Start continuous distance logging (every detection cycle)
  *   TOF_LOG OFF         - Stop continuous distance logging
  *   TOF_LOG <ms>        - Log at most once every <ms> milliseconds (e.g. TOF_LOG 5)
@@ -15,6 +16,7 @@
 
 #include "console_internal.h"
 #include "TofProximityManager.hpp"
+#include "cmsis_os.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -69,6 +71,54 @@ static bool cmd_tof_status(const char* cmd_buffer, UART_HandleTypeDef* huart) {
     return true;
 }
 
+static bool cmd_tof_watch(const char* cmd_buffer, UART_HandleTypeDef* huart) {
+    const char* arg = console_get_arg(cmd_buffer, "TOF_WATCH");
+    int seconds = arg ? atoi(arg) : 10;
+    if (seconds <= 0) seconds = 10;
+    if (seconds > 120) seconds = 120;
+
+    auto& mgr = TofProximityManager::getInstance();
+
+    console_printf(huart,
+        "\r\n[TOF] Live distances (mm) for %ds, '!' = obstacle. Press Enter to stop.\r\n",
+        seconds);
+
+    static const char* names[6] = { "TOP", "BOT", "FWD", "BCK", "LFT", "RGT" };
+
+    uint32_t end_ms = HAL_GetTick() + (uint32_t)seconds * 1000u;
+    char line[128];
+    bool aborted = false;
+
+    while ((int32_t)(end_ms - HAL_GetTick()) > 0) {
+        if (console_abort_requested()) {
+            aborted = true;
+            break;
+        }
+        TofDistanceSnapshot snap = {};
+        mgr.getSnapshot(&snap);
+
+        // Fixed-width fields so each \r redraw fully overwrites the previous line
+        int off = snprintf(line, sizeof(line), "\r");
+        for (int i = 0; i < 6; i++) {
+            if (snap.sensor_valid[i]) {
+                off += snprintf(line + off, sizeof(line) - off, "%s:%5u%c ",
+                    names[i],
+                    snap.distance_mm[i],
+                    mgr.isObstacleDetected(static_cast<TofSensorId>(i)) ? '!' : ' ');
+            } else {
+                off += snprintf(line + off, sizeof(line) - off, "%s:  ---  ", names[i]);
+            }
+        }
+        console_send(huart, line);
+
+        osDelay(100);
+    }
+
+    console_send(huart, aborted ? "\r\n[TOF] Watch aborted\r\n"
+                                : "\r\n[TOF] Watch done\r\n");
+    return true;
+}
+
 static bool cmd_tof_log(const char* cmd_buffer, UART_HandleTypeDef* huart) {
     const char* arg = console_get_arg(cmd_buffer, "TOF_LOG");
 
@@ -114,6 +164,11 @@ const console_command_t tof_commands[] = {
         .command  = "TOF_STATUS",
         .handler  = cmd_tof_status,
         .help_text = "One-shot snapshot of all 6 TOF sensor distances"
+    },
+    {
+        .command  = "TOF_WATCH",
+        .handler  = cmd_tof_watch,
+        .help_text = "TOF_WATCH [sec]  — live one-line distance display (updates in place)"
     },
     {
         .command  = "TOF_LOG",

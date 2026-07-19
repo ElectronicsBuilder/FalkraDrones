@@ -89,6 +89,16 @@ void console_printf(UART_HandleTypeDef* huart, const char* fmt, ...);
  */
 const char* console_get_arg(const char* cmd_buffer, const char* command);
 
+/**
+ * @brief True if the operator typed anything since the current command started.
+ *
+ * For long-running commands (watch/monitor loops): poll this each iteration
+ * and bail out when it returns true. The pending input is NOT consumed — it is
+ * processed normally after the handler returns, so plain Enter just aborts,
+ * while a typed command aborts the loop and then executes.
+ */
+bool console_abort_requested(void);
+
 // ============================================================================
 // Command Module Declarations
 // ============================================================================

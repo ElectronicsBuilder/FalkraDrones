@@ -36,6 +36,7 @@
 #include "stm32f7xx_hal.h"
 #include "ffs.h"
 #include "log.hpp"
+#include "uart.hpp"
 
 extern UART_HandleTypeDef huart1;
 const char* prompt = "\r\n\033[36m[Falkra >>] \033[0m";
@@ -74,6 +75,16 @@ static const command_module_t command_modules[] = {
 };
 
 static const size_t command_modules_count = sizeof(command_modules) / sizeof(command_modules[0]) - 1;
+
+// ============================================================================
+// Long-Running Command Support
+// ============================================================================
+
+bool console_abort_requested(void) {
+    // Commands run synchronously inside the console byte handler, so any bytes
+    // the operator types during a command sit unread in the UART RX ring.
+    return uart_rx_pending();
+}
 
 // ============================================================================
 // Command Dispatcher
