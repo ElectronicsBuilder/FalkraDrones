@@ -47,7 +47,6 @@
 #include "status.hpp"
 
 #include "test_max98357.hpp"
-#include "main_app.h"
 #include "wifi_tcpClient.h"
 #include "wifi_tcpServer.h"
 #include "tcp_server.h"
@@ -83,7 +82,6 @@ void UserDriverTask(void *argument);
 void UART_Task(void *argument);
 void GUI_task(void *argument);
 void DISPLAY_task(void *argument);
-void wifiTask(void *argument);
 void tcpClientTask(void *argument);
 void tcpServerTask(void *argument);
 
@@ -199,19 +197,6 @@ const osThreadAttr_t statusTask_attributes = {
     .cb_size = 0,
     .stack_mem = NULL,
     .stack_size = 4096,  // was 1024: overflowed (float printf + BMP581 lib + fs logging)
-    .priority = (osPriority_t)osPriorityNormal,
-    .tz_module = 0,
-    .reserved = 0
-};
-
-osThreadId_t wifiTaskHandle;
-const osThreadAttr_t wifiTask_attributes = {
-    .name = "WIFI TASK",
-    .attr_bits = 0,
-    .cb_mem = NULL,
-    .cb_size = 0,
-    .stack_mem = NULL,
-    .stack_size = 4096 * 2,
     .priority = (osPriority_t)osPriorityNormal,
     .tz_module = 0,
     .reserved = 0
@@ -405,11 +390,6 @@ void main_cpp(void)
         Error_Handler();
     }
 
-    // Initialize ToF distance reading task
-    // if (!tof_distance_init()) {
-    //     LOG_WARN("[MAIN] ToF distance task initialization failed (continuing)");
-    // }
-
     // Log UserConfig WiFi credentials if loaded
     if (g_userConfig && userconfig_has_wifi_credentials(g_userConfig)) {
         LOG_INFO("[UserConfig] Loaded WiFi credentials from NVRAM: SSID=%s",
@@ -421,8 +401,10 @@ void main_cpp(void)
 
     osKernelInitialize();
 
-    //// Create TCP client message queue
-   //// tcpClientQueue = xQueueCreate(10, TCP_MSG_MAX_LEN);
+    tcpClientQueue = xQueueCreate(10, TCP_MSG_MAX_LEN);
+    if (!tcpClientQueue) {
+        LOG_ERROR("[MAIN] Failed to create TCP client queue");
+    }
 
     UserDriverTask_TaskHandle           = osThreadNew(UserDriverTask, NULL, &UserDriverTask_attributes);
     heartbeatTask_TaskHandle            = osThreadNew(heartbeatTask, NULL, &heartbeatTask_attributes);
@@ -432,14 +414,15 @@ void main_cpp(void)
     GUI_TaskHandle                      = osThreadNew(GUI_task, NULL, &GUITask_attributes);
     DISPLAY_TaskHandle                  = osThreadNew(DISPLAY_task, NULL, &DISPLAYTask_attributes);
     statusTaskHandle                    = osThreadNew(status_task, NULL, &statusTask_attributes);
-    ////wifiTaskHandle                      = osThreadNew(wifiTask, NULL, &wifiTask_attributes);
-    ////tcpClientTaskHandle                 = osThreadNew(tcpClientTask, NULL, &tcpClientTask_attributes);
+    if (tcpClientQueue) {
+        tcpClientTaskHandle             = osThreadNew(tcpClientTask, NULL, &tcpClientTask_attributes);
+    }
     batteryMonitorTaskHandle            = osThreadNew(batteryMonitorTask, NULL, &batteryMonitorTask_attributes);
-   // RadioReceiverTaskHandle             = osThreadNew(RadioReceiverTask, NULL, &RadioReceiverTask_attributes);
+    RadioReceiverTaskHandle             = osThreadNew(RadioReceiverTask, NULL, &RadioReceiverTask_attributes);
     ToFTaskHandle                       = osThreadNew(tof_task, NULL, &ToFTask_attributes);
     ToFDistanceTaskHandle               = osThreadNew(tof_detection_task, NULL, &ToFDistanceTask_attributes);
-  //  MotorControlTaskHandle              = osThreadNew(MotorControlTask, NULL, &MotorControlTask_attributes);
-   // tcpServerTaskHandle                 = osThreadNew(tcpServerTask, NULL, &tcpServerTask_attributes);
+    MotorControlTaskHandle              = osThreadNew(MotorControlTask, NULL, &MotorControlTask_attributes);
+    tcpServerTaskHandle                 = osThreadNew(tcpServerTask, NULL, &tcpServerTask_attributes);
 
     if (!heartbeatTask_TaskHandle) {
         LOG_ERROR("[MAIN] Failed to create heartbeat task");
@@ -509,21 +492,6 @@ void heartbeatTask(void *argument)
     }
 }
  
-
-void wifiTask(void *argument)
-{
-     (void)argument; // Mark argument as unused
-    while (!TouchGFX_init || !PeripheralsTestComplete) {
-    osDelay(10);
-}
-    waitLogInit();
-    main_app();
-
-    while(1)
-    {
-        osDelay(10);
-    }
-}
 
 void UART_Task(void *argument)
 {
@@ -653,70 +621,6 @@ void tcpClientTask(void *argument)
         }
     }
 }
-
-// void tcpServerTask(void *argument)
-// {
-//     // Wait for Wi-Fi to be initialized
-//     while (!TouchGFX_init || !PeripheralsTestComplete) {
-//         osDelay(100);
-//     }
-
-//     // Additional delay to ensure Wi-Fi is fully connected
-//    // osDelay(10000);
-//     waitWifiInit();
-
-//     LOG_INFO("[TCP Server] Task started, initializing server...");
-
-//     // Initialize TCP server on default port (8080)
-//     if (wifi_tcp_server_init(0) != 0) {
-//         LOG_ERROR("[TCP Server] Failed to initialize server");
-//         goto error_exit;
-//     }
-
-//     // Start TCP server
-//     if (wifi_tcp_server_start() != 0) {
-//         LOG_ERROR("[TCP Server] Failed to start server");
-//         goto error_exit;
-//     }
-
-//     LOG_INFO("[TCP Server] Server started successfully");
-
-//     // Main server loop
-//     for (;;) {
-//         // Process server operations
-//         int32_t clients_served = wifi_tcp_server_process();
-
-//         if (clients_served < 0) {
-//             LOG_ERROR("[TCP Server] Error processing server operations");
-//             break;
-//         }
-
-//         // Give other tasks a chance to run
-//         osDelay(10);  // Reduced from 100ms to 10ms for better responsiveness
-
-//         // Periodically log server status
-//         static uint32_t last_status_log = 0;
-//         uint32_t now = HAL_GetTick();
-//         if (now - last_status_log > 30000) { // Every 30 seconds
-//             tcp_server_state_t state;
-//             uint32_t active_clients, total_connections;
-//             wifi_tcp_server_get_status(&state, &active_clients, &total_connections);
-
-//             LOG_INFO("[TCP Server] Status: State=%d, Active=%lu, Total=%lu",
-//                      state, active_clients, total_connections);
-//             last_status_log = now;
-//         }
-//     }
- 
-// error_exit:
-//     LOG_ERROR("[TCP Server] Task exiting due to error");   
-//     wifi_tcp_server_stop();
-
-//     // Task should not exit, but if it does, suspend itself  
-//     for (;;) {
-//         osDelay(10000);
-//     }
-// }
 
 static void waitLogInit(void)
 {

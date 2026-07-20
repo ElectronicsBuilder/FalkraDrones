@@ -33,8 +33,6 @@
 
 /* Exported functions --------------------------------------------------------*/
 void MX_TOF_Init(void);
-void MX_TOF_Process(void);
-void Return_distance(void);
 void MX_TOF_Start(void);
 
 /**

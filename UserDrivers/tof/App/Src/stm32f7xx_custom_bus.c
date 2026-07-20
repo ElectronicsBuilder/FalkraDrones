@@ -28,14 +28,7 @@
 #include "semphr.h"
 #endif
 
-#define USE_CUBEMX_BSP_V2 0
-
-#define USE_STM32F7_I2C_HAL_INIT
-
 uint8_t I2C1_INIT_DONE = 0;
-
-
-__weak HAL_StatusTypeDef BSP_MX_I2C1_Init(I2C_HandleTypeDef* hi2c);
 
 /** @addtogroup BSP
   * @{
@@ -52,17 +45,6 @@ __weak HAL_StatusTypeDef BSP_MX_I2C1_Init(I2C_HandleTypeDef* hi2c);
 /** @defgroup STM32F4XX_NUCLEO_BUS_Exported_Variables BUS Exported Variables
   * @{
   */
-#ifndef USE_STM32F7_I2C_HAL_INIT
-I2C_HandleTypeDef hi2c1;
-#endif
-/**
-  * @}
-  */
-
-/** @defgroup STM32F4XX_NUCLEO_BUS_Private_Variables BUS Private Variables
-  * @{
-  */
-
 #if (USE_HAL_I2C_REGISTER_CALLBACKS == 1U)
 static uint32_t IsI2C1MspCbValid = 0;
 #endif /* USE_HAL_I2C_REGISTER_CALLBACKS */
@@ -259,13 +241,7 @@ static int32_t BSP_I2C1_MemRead(uint16_t DevAddr,
   * @{
   */
 
-static void I2C1_MspInit(I2C_HandleTypeDef* hI2c);
 static void I2C1_MspDeInit(I2C_HandleTypeDef* hI2c);
-#if (USE_CUBEMX_BSP_V2 == 1)
-static uint32_t I2C_GetTiming(uint32_t clock_src_hz, uint32_t i2cfreq_hz);
-static void Compute_PRESC_SCLDEL_SDADEL(uint32_t clock_src_freq, uint32_t I2C_Speed);
-static uint32_t Compute_SCLL_SCLH (uint32_t clock_src_freq, uint32_t I2C_speed);
-#endif
 
 /**
   * @}
@@ -289,48 +265,6 @@ static uint32_t Compute_SCLL_SCLH (uint32_t clock_src_freq, uint32_t I2C_speed);
   */
 int32_t BSP_I2C1_Init(void)
 {
-#ifndef USE_STM32F7_I2C_HAL_INIT
-
-	 int32_t ret = BSP_ERROR_NONE;
-
-	  hi2c1.Instance  = I2C1;
-
-	  if(I2C1InitCounter++ == 0)
-	  {
-	    if (HAL_I2C_GetState(&hi2c1) == HAL_I2C_STATE_RESET)
-	    {
-	    #if (USE_HAL_I2C_REGISTER_CALLBACKS == 0U)
-	      /* Init the I2C Msp */
-	      I2C1_MspInit(&hi2c1);
-	    #else
-	      if(IsI2C1MspCbValid == 0U)
-	      {
-	        if(BSP_I2C1_RegisterDefaultMspCallbacks() != BSP_ERROR_NONE)
-	        {
-	          return BSP_ERROR_MSP_FAILURE;
-	        }
-	      }
-	    #endif
-	      if(ret == BSP_ERROR_NONE)
-	      {
-	        /* Init the I2C */
-	        if(BSP_MX_I2C1_Init(&hi2c1) != HAL_OK)
-	        {
-	          ret = BSP_ERROR_BUS_FAILURE;
-	        }
-	        else
-	        {
-	          ret = BSP_ERROR_NONE;
-	          I2C1_INIT_DONE = 1;
-
-	        }
-	      }
-	    }
-	  }
-	  return ret;
-
-#endif
-
 	  MX_I2C1_Init();
 
 	  I2C1_INIT_DONE = 1;
@@ -636,69 +570,6 @@ int32_t BSP_I2C1_RegisterMspCallbacks (BSP_I2C_Cb_t *Callbacks)
   */
 int32_t BSP_GetTick(void) {
   return HAL_GetTick();
-}
-
-/* I2C1 init function */
-
-__weak HAL_StatusTypeDef BSP_MX_I2C1_Init(I2C_HandleTypeDef* hi2c)
-{
-  HAL_StatusTypeDef ret = HAL_OK;
-
-  hi2c->Instance = I2C1;
-  //hi2c->Init.ClockSpeed = 400000;
-  //hi2c->Init.DutyCycle = I2C_DUTYCYCLE_2;
-
-
-  hi2c->Init.Timing = 0x6000030D;
-  //hi2c->Init.Timing = 0x20404768;
-  //  hi2c->Init.Timing = 0x40808ED0;
-
-
-  hi2c->Init.OwnAddress1 = 0;
-  hi2c->Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
-  hi2c->Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
-  hi2c->Init.OwnAddress2 = 0;
-  hi2c->Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
-  hi2c->Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
-  if (HAL_I2C_Init(hi2c) != HAL_OK)
-  {
-    ret = HAL_ERROR;
-  }
-
-  return ret;
-}
-
-static void I2C1_MspInit(I2C_HandleTypeDef* i2cHandle)
-{
-  GPIO_InitTypeDef GPIO_InitStruct;
-  /* USER CODE BEGIN I2C1_MspInit 0 */
-
-  /* USER CODE END I2C1_MspInit 0 */
-
-    __HAL_RCC_GPIOB_CLK_ENABLE();
-    /**I2C1 GPIO Configuration
-    PB8     ------> I2C1_SCL
-    PB9     ------> I2C1_SDA
-    */
-    GPIO_InitStruct.Pin = BUS_I2C1_SCL_GPIO_PIN;
-    GPIO_InitStruct.Mode = GPIO_MODE_AF_OD;
-    GPIO_InitStruct.Pull = GPIO_PULLUP;
-    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
-    GPIO_InitStruct.Alternate = BUS_I2C1_SCL_GPIO_AF;
-    HAL_GPIO_Init(BUS_I2C1_SCL_GPIO_PORT, &GPIO_InitStruct);
-
-    GPIO_InitStruct.Pin = BUS_I2C1_SDA_GPIO_PIN;
-    GPIO_InitStruct.Mode = GPIO_MODE_AF_OD;
-    GPIO_InitStruct.Pull = GPIO_PULLUP;
-    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
-    GPIO_InitStruct.Alternate = BUS_I2C1_SDA_GPIO_AF;
-    HAL_GPIO_Init(BUS_I2C1_SDA_GPIO_PORT, &GPIO_InitStruct);
-
-    /* Peripheral clock enable */
-    __HAL_RCC_I2C1_CLK_ENABLE();
-  /* USER CODE BEGIN I2C1_MspInit 1 */
-
-  /* USER CODE END I2C1_MspInit 1 */
 }
 
 static void I2C1_MspDeInit(I2C_HandleTypeDef* i2cHandle)

@@ -38,7 +38,7 @@ void test_vl53l5cx()
 
 void test_vl53l5cx_polling()
 {
-    LOG_INFO("[TEST_TOF] Starting VL53L5CX polling test...");
+    LOG_INFO("[TEST_TOF] Starting VL53L5CX snapshot test...");
 
     auto& mgr = TofProximityManager::getInstance();
 
@@ -48,11 +48,9 @@ void test_vl53l5cx_polling()
     }
 
     mgr.startRanging();
-    LOG_INFO("[TEST_TOF] Ranging started (polling mode)");
+    LOG_INFO("[TEST_TOF] Ranging started");
 
     for (uint16_t i = 0; i < 50; i++) {
-        mgr.process();
-
         TofDistanceSnapshot snapshot;
         if (mgr.getSnapshot(&snapshot)) {
             LOG_INFO("[TEST_TOF] Cycle %u - T:%u B:%u F:%u Bk:%u L:%u R:%u mm",
@@ -81,57 +79,5 @@ void test_vl53l5cx_polling()
     }
 
     mgr.stopRanging();
-    LOG_INFO("[TEST_TOF] Polling test complete");
-}
-
-void test_vl53l5cx_interrupt()
-{
-    LOG_INFO("[TEST_TOF] Starting VL53L5CX interrupt test...");
-
-    auto& mgr = TofProximityManager::getInstance();
-
-    if (!mgr.init(15, 1)) {
-        LOG_ERROR("[TEST_TOF] Failed to initialize TofProximityManager");
-        return;
-    }
-
-    mgr.enableInterruptMode(true);
-    mgr.startRanging();
-    LOG_INFO("[TEST_TOF] Ranging started (interrupt mode)");
-
-    uint32_t lastPrintTime = 0;
-    for (uint16_t i = 0; i < 500; i++) {
-        TofDistanceSnapshot snapshot;
-        if (mgr.getSnapshot(&snapshot)) {
-            uint32_t now = snapshot.timestamp_ms;
-            if (now - lastPrintTime >= 100) {
-                LOG_INFO("[TEST_TOF] T:%u B:%u F:%u Bk:%u L:%u R:%u mm (ts=%lu)",
-                    snapshot.distance_mm[0],
-                    snapshot.distance_mm[1],
-                    snapshot.distance_mm[2],
-                    snapshot.distance_mm[3],
-                    snapshot.distance_mm[4],
-                    snapshot.distance_mm[5],
-                    snapshot.timestamp_ms);
-                lastPrintTime = now;
-            }
-        }
-
-        if (mgr.isAnyObstacleDetected()) {
-            for (uint8_t s = 0; s < MAX_TOF_SENSORS; s++) {
-                TofSensorId id = static_cast<TofSensorId>(s);
-                if (mgr.isObstacleDetected(id)) {
-                    LOG_INFO("[TEST_TOF] OBSTACLE: %s @ %u cm",
-                        mgr.getSensor(id).getName(),
-                        mgr.getSensor(id).getMinDistance());
-                }
-            }
-        }
-
-        osDelay(10);
-    }
-
-    mgr.stopRanging();
-    mgr.enableInterruptMode(false);
-    LOG_INFO("[TEST_TOF] Interrupt test complete");
+    LOG_INFO("[TEST_TOF] Snapshot test complete");
 }

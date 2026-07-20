@@ -293,12 +293,22 @@ void DriverStatus::updateToFSensors(FalkraStatus& status) {
         stale_reported = false;
     }
 #else
-    (void)status;  // Parameter not directly used - ToF updates handled by TofProximityManager
-    // ToF proximity system uses TofProximityManager singleton
-    // The manager internally updates g_status with sensor data
     auto& mgr = TofProximityManager::getInstance();
-    if (mgr.isRanging()) {
-        mgr.process();
+    TofDistanceSnapshot snapshot = {};
+    if (!mgr.getSnapshot(&snapshot)) {
+        return;
+    }
+
+    for (uint8_t i = 0; i < MAX_TOF_SENSOR; i++) {
+        const auto& sensor = mgr.getSensor(static_cast<TofSensorId>(i));
+        const char* name = sensor.getName();
+
+        std::strncpy(status.tofDeviceName[i], name, sizeof(status.tofDeviceName[i]) - 1);
+        status.tofDeviceName[i][sizeof(status.tofDeviceName[i]) - 1] = '\0';
+        status.tofDeviceLoc[i] = i;
+        status.tofDeviceStatus[i] = snapshot.sensor_valid[i];
+        status.tofSensorDistance[i] = snapshot.distance_mm[i] / 10U;
+        status.tofDetectingFlag[i] = static_cast<uint8_t>(sensor.getDetectionFlag());
     }
 #endif
 }

@@ -83,16 +83,6 @@ public:
     void stopRanging();
     bool isRanging() const;
 
-    static void taskEntry(void* arg);
-
-    void process();
-
-    /**
-     * @brief Main task loop - waits on interrupts or polls based on mode
-     * @note This function never returns. Call from FreeRTOS task.
-     */
-    void processTask();
-
     /**
      * @brief Data acquisition task loop - responds to sensor INT pins, reads I2C data.
      * @note High-priority task. Never returns. Call from FreeRTOS task.
@@ -161,10 +151,7 @@ public:
 private:
     TofProximityManager() = default;
 
-    void pollDistances();
-    void updateAllDetectionStates();
     void updateSnapshot();
-    void readSensorOnInterrupt(uint8_t sensorIndex);
 
     TofSensor _sensors[MAX_TOF_SENSORS];
     osMutexId_t _mutex = nullptr;

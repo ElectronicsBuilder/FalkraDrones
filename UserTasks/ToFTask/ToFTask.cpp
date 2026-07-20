@@ -30,7 +30,6 @@
 #include "TofProximityManager.hpp"
 #include "driver_manager.hpp"
 #include "dm_opts.h"
-#include "app_tof.hpp"
 
 #include "log.hpp"
 #include "cmsis_os.h"
@@ -40,8 +39,6 @@
 namespace {
     constexpr uint16_t PROXIMITY_DETECT_DISTANCE_CM = 15;
     constexpr uint16_t PROXIMITY_MIN_DISTANCE_CM = 5;
-    constexpr uint32_t TASK_PERIOD_MS = 10;
-    constexpr uint32_t LOG_PERIOD_CYCLES = 5;
 }
 
 bool tof_task_init(void) {
@@ -88,20 +85,6 @@ void tof_task(void *argument) {
 
     // High-priority data acquisition loop — responds to sensor INT pins
     mgr.dataTask();  // never returns
-
-
-   // MX_TOF_Init();
-
-    while(1)
-    {
-        MX_TOF_Process();
-            osDelay(TASK_PERIOD_MS);
-            // data_transport_poll(); --- IGNORE ---
-            // LOG_INFO("[TOF_TASK] ToF task running");
-            // osDelay(1000); --- IGNORE ---
-    }
-
-
 }
 
 
@@ -113,16 +96,4 @@ void tof_detection_task(void *argument) {
     (void)argument;
     // Normal-priority detection loop — runs confidence algorithm, updates snapshot
     TofProximityManager::getInstance().detectionTask();  // never returns
-
-  
-
-    while(1)
-    {
-       //  LOG_INFO("[TOF_TASK] ToF detection task running");
-        osDelay(1000);
-    }
-
-
-
-
 }

@@ -30,8 +30,6 @@
 
 extern SPI_HandleTypeDef hspi6;
 
-uint16_t DISPLAY_DONE_UPDATE = 0;
-
 // Display configuration used by DriverManager for ST7789 initialization
 ST7789::Config display_config = {
     .hspi = &hspi6,

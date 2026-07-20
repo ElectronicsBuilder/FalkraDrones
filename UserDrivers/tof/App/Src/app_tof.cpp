@@ -49,20 +49,16 @@ extern uint16_t proximity_devices[MAX_TOF_SENSOR][MAX_ZONE_PER_SENSOR];
 extern tof_sensor_t sensors[MAX_TOF_SENSOR];
 extern uint8_t TOF_DEVC_INIT_DONE;
 
-RANGING_SENSOR_Result_t Result;
+static RANGING_SENSOR_Result_t Result;
 
 #define TOF_ADDR_BASE  0x54  // first sensor gets 0x54, then +2 each
 
 /* Private define ------------------------------------------------------------*/
 #define TIMING_BUDGET (5U)  //(15U) /* 15 ms timing budget (balanced accuracy/speed) */
 #define RANGING_FREQUENCY (TOF_RANGING_FREQUENCY_HZ) /* Per-sensor ranging frequency */
-#define POLLING_PERIOD (1000U/RANGING_FREQUENCY) /* refresh rate for polling mode (milliseconds) */
 
 /* Private variables ---------------------------------------------------------*/
-static RANGING_SENSOR_ProfileConfig_t Profile;
-static int32_t status = 0;
 static uint8_t ToF_Present[RANGING_SENSOR_INSTANCES_NBR] = {0};
-volatile uint8_t ToF_EventDetected = 0;
 
 /**
  * @brief Bidirectional mapping between logical sensor indices and BSP active indices
@@ -84,45 +80,12 @@ static ToFIndexMap_t g_tof_index_map = {
     .active_count = 0
 };
 
-
-static const char* tofDevStr[] = {
-    "TOP",     // index 0
-    "BOTTOM",  // index 1
-    "FRONT",   // index 2
-    "BACK",    // index 3
-    "LEFT",    // index 4
-    "RIGHT"    // index 5
-};
-
-
-static const tof_sensor_id_t sensor_init_order[] = {
-    tof_top,
-    tof_bottom,
-    tof_front,
-    tof_back,
-    tof_left,
-    tof_right
-};
-
-
-
-
 /* Private function prototypes -----------------------------------------------*/
 static void MX_53L5A1_MultiSensorRanging_Init(void);
-static void MX_53L5A1_MultiSensorRanging_Process(void);
 static void MX_53L5A1_MultiSensorRanging_Start(void);
-
-
-static void print_result(RANGING_SENSOR_Result_t *Result);
 static void write_lowpower_pin(uint8_t device, GPIO_PinState pin_state);
-static void reset_all_sensors(void);
 static void copy_distance_val(uint16_t TOF_DEV, RANGING_SENSOR_Result_t *Result);
-//void enable_sensor_power(uint8_t device, GPIO_PinState state);
 static void enable_sensor_power(uint8_t device_index, GPIO_PinState pin_state);
-
-
-static RANGING_SENSOR_Capabilities_t Cap;
-//static RANGING_SENSOR_ProfileConfig_t Profile;
 
 void MX_TOF_Init(void)
 {
@@ -130,24 +93,6 @@ void MX_TOF_Init(void)
   MX_53L5A1_MultiSensorRanging_Init();
 
 }
-
-/*
- * LM background task
- */
-void MX_TOF_Process(void)
-{
-  /* USER CODE BEGIN TOF_Process_PreTreatment */
-
-  /* USER CODE END TOF_Process_PreTreatment */
-
-  MX_53L5A1_MultiSensorRanging_Process();
-
-  /* USER CODE BEGIN TOF_Process_PostTreatment */
-
-  /* USER CODE END TOF_Process_PostTreatment */
-}
-
-
 
 static void MX_53L5A1_MultiSensorRanging_Init(void)
 {
@@ -167,9 +112,6 @@ static void MX_53L5A1_MultiSensorRanging_Init(void)
 
     // 2. Initialize only active sensors
     for (uint8_t logical_idx = 0; logical_idx < MAX_TOF_SENSOR; logical_idx++) {
-
-        // if (sensors[logical_idx].status != sensor_active)
-        //     continue;
 
         osDelay(250);  // Ensure bus is quiet before powering
         enable_sensor_power(logical_idx, GPIO_PIN_SET);
@@ -339,111 +281,6 @@ static void MX_53L5A1_MultiSensorRanging_Start(void)
 }
 
 
-static void MX_53L5A1_MultiSensorRanging_Process(void)
-{
-  uint8_t i;
-
-  //Profile.RangingProfile = RS_PROFILE_4x4_CONTINUOUS;
-  Profile.RangingProfile =   RS_PROFILE_4x4_AUTONOMOUS;
-
-
-  Profile.TimingBudget = TIMING_BUDGET; /* 5 ms < TimingBudget < 100 ms */
-  Profile.Frequency = RANGING_FREQUENCY; /* Ranging frequency Hz (shall be consistent with TimingBudget value) */
-  Profile.EnableAmbient = 0; /* Enable: 1, Disable: 0 */
-  Profile.EnableSignal = 0; /* Enable: 1, Disable: 0 */
-
-  for (i = 0; i < RANGING_SENSOR_INSTANCES_NBR; i++)
-  {
-    /* skip this device if not detected */
-    if (ToF_Present[i] != 1) continue;
-
-    VL53L5A1_RANGING_SENSOR_ConfigProfile(i, &Profile);
-    //status = VL53L5A1_RANGING_SENSOR_Start(i, RS_MODE_ASYNC_CONTINUOUS);
-    status = VL53L5A1_RANGING_SENSOR_Start(i, RS_MODE_BLOCKING_CONTINUOUS);
-
-
-    if (status != BSP_ERROR_NONE)
-    {
-      LOG_INFO("VL53L3A2_RANGING_SENSOR_Start %d failed\r\n", i);
-      while(1);
-    }
-  }
-
-  while (1)
-  {
-	
-    /* polling mode */
-    for (i = 0; i < RANGING_SENSOR_INSTANCES_NBR; i++)
-    {
-       if (!ToF_Present[i]) continue;
-
-      status = VL53L5A1_RANGING_SENSOR_GetDistance(i, &Result); 
-
-      if (status == BSP_ERROR_NONE)
-      {
-    		copy_distance_val(i, &Result);
-    		osDelay(POLLING_PERIOD);
-        	if(g_status.tofCmdStatus == tof_system_state_t::sensors_paused)		// stop all measurement
-        	{
-        		break;
-        	}
-      }
-    }
-
-
-if (g_status.tofCmdStatus == tof_system_state_t::sensors_paused)		// stop all measurement
-	{
-		VL53L5A1_RANGING_SENSOR_Stop(i);
-		break;
-	}
-
-    break; //todo added here for testing. need  to remove 
-  }
-
-}
-
-
-void Return_distance(void)
-{
-    // Loop through logical sensor indices (0-5 for locations)
-    for (uint8_t logical_idx = 0; logical_idx < MAX_TOF_SENSOR; logical_idx++)
-    {
-        // OPTIMIZATION 1: Skip sensors not detected on I2C bus
-        if (!ToF_Present[logical_idx]) {
-            continue;  // Save I2C bandwidth - sensor not present
-        }
-
-        // OPTIMIZATION 2: Skip sensors marked inactive after sync
-        if (sensors[logical_idx].status != sensor_active) {
-            continue;  // Respect dynamic status updates
-        }
-
-        // INDEX TRANSLATION: Convert logical index to BSP index
-        uint8_t bsp_idx = g_tof_index_map.logical_to_bsp[logical_idx];
-        if (bsp_idx == 0xFF) {
-            // Invalid mapping - should never happen after proper init
-            LOG_ERROR("[TOF_POLL] Invalid mapping for sensor %u", logical_idx);
-            continue;
-        }
-
-        // Poll sensor using BSP index (for I2C communication)
-        status = VL53L5A1_RANGING_SENSOR_GetDistance(bsp_idx, &Result);
-
-        if (status == BSP_ERROR_NONE)
-        {
-            // Store distance data using LOGICAL index (maintains location semantics)
-            copy_distance_val(logical_idx, &Result);
-        }
-        else if(g_status.tofCmdStatus == tof_system_state_t::sensors_paused)
-        {
-            // Handle pause command (existing logic)
-        }
-    }
-}
-
-
-
-
 static void copy_distance_val(uint16_t TOF_DEV, RANGING_SENSOR_Result_t *Result)
 {
 
@@ -527,40 +364,6 @@ static void write_lowpower_pin(uint8_t device_index, GPIO_PinState pin_state)
     );
 
     osDelay(100);
-}
-
-
-static void reset_all_sensors(void)
-{
-
-    HAL_GPIO_WritePin(VL53L5A1_PWR_EN_TOP_PORT, VL53L5A1_PWR_EN_TOP_PIN, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(VL53L5A1_PWR_EN_BOTTOM_PORT, VL53L5A1_PWR_EN_BOTTOM_PIN, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(VL53L5A1_PWR_EN_FRONT_PORT, VL53L5A1_PWR_EN_FRONT_PIN, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(VL53L5A1_PWR_EN_BACK_PORT, VL53L5A1_PWR_EN_BACK_PIN, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(VL53L5A1_PWR_EN_LEFT_PORT, VL53L5A1_PWR_EN_LEFT_PIN, GPIO_PIN_RESET);
-    osDelay(100);
-
-    HAL_GPIO_WritePin(VL53L5A1_PWR_EN_TOP_PORT, VL53L5A1_PWR_EN_TOP_PIN, GPIO_PIN_SET);
-    HAL_GPIO_WritePin(VL53L5A1_PWR_EN_BOTTOM_PORT, VL53L5A1_PWR_EN_BOTTOM_PIN, GPIO_PIN_SET);
-    HAL_GPIO_WritePin(VL53L5A1_PWR_EN_FRONT_PORT, VL53L5A1_PWR_EN_FRONT_PIN, GPIO_PIN_SET);
-    HAL_GPIO_WritePin(VL53L5A1_PWR_EN_BACK_PORT, VL53L5A1_PWR_EN_BACK_PIN, GPIO_PIN_SET);
-    HAL_GPIO_WritePin(VL53L5A1_PWR_EN_LEFT_PORT, VL53L5A1_PWR_EN_LEFT_PIN, GPIO_PIN_SET);
-    osDelay(100);
-
-    HAL_GPIO_WritePin(VL53L5A1_LPn_TOP_PORT, VL53L5A1_LPn_TOP_PIN, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(VL53L5A1_LPn_BOTTOM_PORT, VL53L5A1_LPn_BOTTOM_PIN, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(VL53L5A1_LPn_FRONT_PORT, VL53L5A1_LPn_FRONT_PIN, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(VL53L5A1_LPn_BACK_PORT, VL53L5A1_LPn_BACK_PIN, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(VL53L5A1_LPn_LEFT_PORT, VL53L5A1_LPn_LEFT_PIN, GPIO_PIN_RESET);
-    osDelay(100);
-
-    HAL_GPIO_WritePin(VL53L5A1_LPn_TOP_PORT, VL53L5A1_LPn_TOP_PIN, GPIO_PIN_SET);
-    HAL_GPIO_WritePin(VL53L5A1_LPn_BOTTOM_PORT, VL53L5A1_LPn_BOTTOM_PIN, GPIO_PIN_SET);
-    HAL_GPIO_WritePin(VL53L5A1_LPn_FRONT_PORT, VL53L5A1_LPn_FRONT_PIN, GPIO_PIN_SET);
-    HAL_GPIO_WritePin(VL53L5A1_LPn_BACK_PORT, VL53L5A1_LPn_BACK_PIN, GPIO_PIN_SET);
-    HAL_GPIO_WritePin(VL53L5A1_LPn_LEFT_PORT, VL53L5A1_LPn_LEFT_PIN, GPIO_PIN_SET);
-    osDelay(100);
-
 }
 
 

@@ -101,7 +101,6 @@ extern I2C_HandleTypeDef hi2c1;
   */
 
 /* BUS IO driver over I2C Peripheral */
-HAL_StatusTypeDef BSP_MX_I2C1_Init(I2C_HandleTypeDef* hi2c);
 int32_t BSP_I2C1_Init(void);
 int32_t BSP_I2C1_DeInit(void);
 int32_t BSP_I2C1_IsReady(uint16_t DevAddr, uint32_t Trials);

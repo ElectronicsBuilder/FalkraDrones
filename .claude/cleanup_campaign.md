@@ -172,6 +172,45 @@ Acceptance (measured):
 - Every deleted symbol greps to zero post-delete.
 - Invariant checklist passes; firmware size same or smaller.
 
+### C1 results (2026-07-20)
+
+Status: local build, flash, and hardware console invariants passed after the
+runtime fixes listed below.
+
+| # | Metric | C0 baseline | C1 result | Delta |
+| ---: | --- | --- | --- | --- |
+| 1 | Project LOC, excluding vendor code | `48775 total` | `46933 total` | `-1842` |
+| 2 | Dead-code marker count | `3` | `0` | `-3` |
+| 3 | Non-UART `HAL_MAX_DELAY` count in `UserDrivers` | `34` | `34` | `0` |
+| 4 | `HAL_Delay(` count in `UserDrivers` | `36` | `36` | `0` |
+| 5a | Feature flag count in ToF/DM opts headers | `24` | `24` | `0` |
+| 5b | `#if TOF_OPT` / `#if DM_OPT` conditional block count | `60` | `56` | `-4` |
+| 6 | Full clean-build warning lines | `637` | `631` | `-6` |
+| 7 | Firmware size | text `748300`, data `111696`, bss `341264`, dec `1201260`, hex `12546c` | text `747204`, data `111696`, bss `341240`, dec `1200140`, hex `12500c` | dec `-1120` |
+
+Deleted-symbol grep proof:
+
+```bash
+rg -n "TofProximityManager::(taskEntry|processTask|process|pollDistances|updateAllDetectionStates|readSensorOnInterrupt)|MX_53L5A1_MultiSensorRanging_Process|MX_TOF_Process|Return_distance|reset_all_sensors|print_result|tofDevStr|sensor_init_order|ToF_EventDetected|DISPLAY_DONE_UPDATE|USE_PARTIAL_BUFFER|BSP_MX_I2C1_Init|USE_STM32F7_I2C_HAL_INIT|USE_CUBEMX_BSP_V2|--- IGNORE ---|need  to remove|todo added here" UserDrivers UserTasks src TouchGFX drivers_test
+# no hits
+```
+
+Invariant evidence:
+
+- Flash: SWD programming of `build\Debug\FalkraDronesInternalFlash.bin` to `0x08080000` succeeded.
+- Boot capture: `tools/captures/cleanup/retry4_boot_queuefix.txt` shows `Active sensors: 6/6`, ranging started, TCP client/server tasks still running afterward, and no `[FAULT]`.
+- Console captures: `retry4_help.txt`, `retry4_env_all.txt`, `retry4_tof_status.txt`, `retry4_tof_watch_abort.txt`.
+- Clean build log: `tools/captures/cleanup/c1_clean_build_retry.log`.
+
+Runtime fixes required for invariant pass:
+
+- `UserDrivers/wifi/ST67W6X/Target/logging_config.h`: set `LOG_THREAD_STACK_SIZE` to `4096`; the first retry faulted with `Stack overflow in task: OutputTask` because the ST Wi-Fi logging output task routes through the project logger/printf path.
+- `UserDrivers/wifi/App/wifi_tcpServer.c`: TCP client accept no longer auto-selects Wi-Fi as the global data transport. UART remains the default console transport unless an explicit transport command changes it.
+- `src/main_cpp.cpp`: `tcpClientQueue` is created before `tcpClientTask` starts, and the task is only created when the queue allocation succeeds. The cleanup enabled the TCP client task while the queue creation line was still commented, which made the console go silent after Wi-Fi startup.
+
+Known follow-up for C4: `TOF_STATUS`, `TOF_WATCH`, and `TOF_LOG` are registered
+and verified, but the `HELP` text still does not list them.
+
 ---
 
 ## C2 — Bounded timeouts (no more infinite waits in drivers)

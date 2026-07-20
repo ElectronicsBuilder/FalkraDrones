@@ -121,18 +121,6 @@ void TouchGFXHAL::flushFrameBuffer(const touchgfx::Rect& rect)
     HAL::getInstance()->unlockFrameBuffer();
 #endif
 
-#ifdef USE_PARTIAL_BUFFER
-    HAL::flushFrameBuffer(rect);  // Notify TouchGFX core
-
-    frameBufferAllocator->markBlockReadyForTransfer();
-
-    if (!touchgfxDisplayDriverTransmitActive())
-    {
-        touchgfx::Rect r;
-        const uint8_t* pixels = frameBufferAllocator->getBlockForTransfer(r);
-        touchgfxDisplayDriverTransmitBlock((uint8_t*)pixels, r.x, r.y, r.width, r.height);
-    }
-#endif
 }
 
 
@@ -206,26 +194,6 @@ void TouchGFXHAL::endFrame()
 {
     TouchGFXGeneratedHAL::endFrame();
 }
-
-
-#ifdef USE_PARTIAL_BUFFER
-
-	static volatile bool blockIsTransferred = false;
-
-	void touchgfx:: FrameBufferAllocatorWaitOnTransfer()
-	{
-	  while(!blockIsTransferred);
-	}
-
-
-	void touchgfx:: FrameBufferAllocatorSignalBlockDrawn()
-	{
-		blockIsTransferred = false;
-		return;
-	}
-
-#endif
-
 
 
 extern "C" void touchgfx_signalVSyncTimer(void) { 

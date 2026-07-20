@@ -338,9 +338,6 @@ static int32_t tcp_server_accept_client(void)
     const char* welcome = "Hello from STM32 TCP Server!\r\n";
     W6X_Net_Send(client_socket, (struct sockaddr*)welcome, strlen(welcome), 0);
 
-    data_transport_select(DATA_TRANSPORT_WIFI); //todo handle differently later
-    data_transport_set_mode(APP_TRANSPORT_MODE_COMMAND);
-
     return 1;
 }
 

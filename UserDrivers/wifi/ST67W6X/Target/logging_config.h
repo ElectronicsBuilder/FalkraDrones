@@ -43,6 +43,9 @@ extern "C" {
 /** Global verbosity level (LOG_NONE, LOG_ERROR, LOG_WARN, LOG_INFO, LOG_DEBUG) */
 #define LOG_LEVEL                               WIFI_LOG_INFO
 
+/** OutputTask calls into the project logger/printf path; the ST default is 256 bytes. */
+#define LOG_THREAD_STACK_SIZE                   4096
+
 /* USER CODE BEGIN EC */
 
 /* USER CODE END EC */
